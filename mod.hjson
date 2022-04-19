@@ -1,12 +1,12 @@
 #!VERSION 1.04
 #!BRANCH "master"
-#!REPO "Mnemotechnician/New-Controls-Public"
 
-displayName: "New controls"
-name: "newcontrols"
-author: "Мнемотехник"
-description: "This mod is multiplayer-compatible!\n\nSo, basically... This mod adds new ways of controlling your unit (mostly for mobile): fully manual and fully ai.\n\nManual mode consists of two thumbsticks and an action panel.\nAi mode includes three actions (attack, mine, patrol) + auto action selection.\n\nCheck readme.md for detailed info."
-version: 1.0.4
+
+displayName: "Ai Alt controls"
+name: "ai-controls"
+author: "JiroDoesStuff/Rush, Мнемотехник"
+description: "(Wip) Fork of 'Mnemotechnician/New-Controls-Public' that focuses on the Ai part. Ai will attack, mine, rebuild & patrol \n\n tailored for Desktop for maximume lazyness or afk"
+version: 1.0.0
 minGameVersion: 134
 hidden: true
 

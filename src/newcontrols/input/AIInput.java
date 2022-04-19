@@ -1,41 +1,40 @@
 package newcontrols.input;
 
-import arc.*;
-import arc.Graphics.*;
-import arc.Graphics.Cursor.*;
-import arc.graphics.*;
-import arc.graphics.g2d.*;
-import arc.math.*;
-import arc.math.geom.*;
-import arc.scene.*;
-import arc.scene.ui.*;
-import arc.scene.ui.layout.*;
-import arc.util.*;
-import arc.struct.*;
-import arc.input.*;
-import mindustry.*;
-import mindustry.content.*;
-import mindustry.core.*;
-import mindustry.entities.*;
-import mindustry.entities.units.*;
-import mindustry.game.EventType.*;
-import mindustry.game.*;
+import arc.Core;
+import arc.input.KeyCode;
+import arc.math.Angles;
+import arc.math.Mathf;
+import arc.math.geom.Geometry;
+import arc.math.geom.Position;
+import arc.math.geom.Vec2;
+import arc.scene.ui.layout.Table;
+import arc.struct.Queue;
+import arc.struct.Seq;
+import arc.util.Interval;
+import arc.util.Nullable;
+import arc.util.Tmp;
+import mindustry.Vars;
+import mindustry.ai.Pathfinder;
+import mindustry.content.Blocks;
+import mindustry.entities.Predict;
+import mindustry.entities.Units;
+import mindustry.entities.units.BuildPlan;
+import mindustry.game.Teams;
 import mindustry.gen.*;
-import mindustry.graphics.*;
-import mindustry.ui.*;
-import mindustry.ai.*;
-import mindustry.world.*;
-import mindustry.world.meta.*;
-import mindustry.input.*;
-import mindustry.type.*;
-import mindustry.net.*;
-import mindustry.net.Administration.*;
+import mindustry.graphics.Pal;
+import mindustry.input.Binding;
+import mindustry.input.InputHandler;
+import mindustry.type.Item;
+import mindustry.type.ItemStack;
+import mindustry.type.UnitType;
+import mindustry.ui.Styles;
+import mindustry.world.Build;
+import mindustry.world.Tile;
+import mindustry.world.blocks.ConstructBlock;
+import mindustry.world.meta.BlockFlag;
 
-import static arc.Core.*;
-import static mindustry.Vars.net;
+import static arc.Core.bundle;
 import static mindustry.Vars.*;
-
-import newcontrols.ui.fragments.*;
 
 /** 
  * Emulates basic player actions && handles thumbstick controls, configurable.
@@ -58,15 +57,15 @@ import newcontrols.ui.fragments.*;
  * ...
 **/
 public class AIInput extends InputHandler {
-	
-	public enum AIAction {NONE, AUTO, ATTACK, MINE, PATROL, IDLE};
+
+	public enum AIAction {NONE, AUTO, ATTACK, MINE, BUILD, PATROL, IDLE, };
 	
 	public Interval updateInterval = new Interval(4);
-	public boolean paused = false, manualMode = true;
+	public boolean paused = false, manualMode = false;
 	public float lastZoom = -1; //no idea
 	
 	//Whether these actions are enabled. todo: actually make this comprehensible?
-	public boolean attack = true, mine = true, patrol = true;
+	public boolean attack = true, mine = true, build = true, patrol = true;
 	
 	/** Current action selected by the user */
 	public AIAction current = AIAction.AUTO;
@@ -89,7 +88,9 @@ public class AIInput extends InputHandler {
 	
 	//settings
 	public float attackRadius = 1200f;
-	public float mineRadius = 0f;
+	public float mineRadius = 2f;
+	public float respawnThreshold = 5;
+
 	/** Items that won't be mined */
 	public Seq<Item> mineExclude = new Seq();
 	
@@ -97,7 +98,9 @@ public class AIInput extends InputHandler {
 	public Building buildingTapped;
 	
 	public static Vec2 movement = new Vec2();
-	
+
+	public @Nullable Teams.BlockPlan lastPlan;
+
 	@Override
 	public boolean tap(float x, float y, int count, KeyCode button){
 		//if(state.isMenu()) return false;
@@ -109,24 +112,7 @@ public class AIInput extends InputHandler {
 		
 		Call.tileTap(player, cursor);
 		Tile linked = cursor.build == null ? cursor : cursor.build.tile;
-		
-		//control units
-		if (count == 2) {
-			Unit unit = player.unit();
-			
-			//control a unit/block detected on first tap of double-tap
-			if (unitTapped != null) {
-				Call.unitControl(player, unitTapped);
-				recentRespawnTimer = 1f;
-			} else if (buildingTapped != null) {
-				Call.buildingControlSelect(player, buildingTapped);
-				recentRespawnTimer = 1f;
-			} else if(cursor.block() == Blocks.air && unit.within(cursor, unit.type.miningRange)) {
-				unit.mineTile = mineTile;
-			}
-			return false;
-		}
-		
+
 		tileTappedH(linked.build);
 		
 		unitTapped = selectedUnit();
@@ -192,16 +178,7 @@ public class AIInput extends InputHandler {
 			manualMode = !manualMode;
 		}).update(l -> l.setChecked(manualMode)).tooltip("@ai.manual-mode");
 	}
-	
-	@Override
-	public void buildUI(Group origin) {
-		super.buildUI(origin);
-		origin.fill(t -> {
-			t.center().bottom();
-			ActionPanel.buildLandscape(t, this);
-		});
-	}
-	
+
 	//REGION CONTROLS
 	@Override
 	public void update() {
@@ -270,6 +247,8 @@ public class AIInput extends InputHandler {
 		if (current == AIAction.AUTO && updateInterval.get(20)) {
 			if (attack && canAttack && (target = Units.closestTarget(unit.team, unit.x, unit.y, attackRadius > 0 ? attackRadius : Float.MAX_VALUE, t -> true)) != null) {
 				auto = AIAction.ATTACK;
+			} else if (build && unit.canBuild() && lastPlan != null ) {
+				auto = AIAction.BUILD;
 			} else if (mine && unit.canMine() && mineItem != null && indexer.findClosestOre(unit, mineItem) != null) {
 				auto = AIAction.MINE;
 			} else if (patrol && canAttack && ((state.rules.waves && spawner.countSpawns() > 0) || (indexer.getEnemy(unit.team(), BlockFlag.core) != null))) {
@@ -284,6 +263,7 @@ public class AIInput extends InputHandler {
 		switch (action) {
 			case ATTACK: attackAI(unit); break;
 			case MINE: mineAI(unit); break;
+			case BUILD: buildAi(unit); break;
 			case PATROL: patrolAI(unit); break;
 		}
 		
@@ -298,8 +278,13 @@ public class AIInput extends InputHandler {
 		UnitType type = unit.type;
 		
 		if (target != null && type != null) {
-			float bulletSpeed = unit.hasWeapons() ? type.weapons.first().bullet.speed : 0;
-			
+		  //Respawn when threshold is met to save time by not getting lock on the unit's death
+		  if(respawnThreshold >= 1 && unit.health <= respawnThreshold)
+		    {
+				unitClear(player);
+			}
+		 	float bulletSpeed = unit.hasWeapons() ? type.weapons.first().bullet.speed : 0;
+
 			float approachRadius = 0.95f;
 			float dist = unit.range() * approachRadius;
 			float angle = target.angleTo(unit);
@@ -312,7 +297,55 @@ public class AIInput extends InputHandler {
 			aimLook(intercept);
 		}
 	}
-	
+
+	//Yes this just BuilderAi with extra/fewer steps
+	protected void buildAi(Unit unit){
+		if(unit.buildPlan() != null){
+			//approach request if building
+			BuildPlan req = unit.buildPlan();
+
+			boolean valid =
+					!(lastPlan != null && lastPlan.removed) &&
+							((req.tile() != null && req.tile().build instanceof ConstructBlock.ConstructBuild cons && cons.current == req.block) ||
+									(req.breaking ?
+											Build.validBreak(unit.team(), req.x, req.y) :
+											Build.validPlace(req.block, unit.team(), req.x, req.y, req.rotation)));
+
+			if(valid){
+				//move toward the request
+				aimLook(req);
+				movement.set(0, 0).trns(req.angleTo(unit), mineRadius).add(req).sub(unit).limit(unit.speed());
+				unit.movePref(movement);
+			}else{
+				//discard invalid request
+				unit.plans.removeFirst();
+				lastPlan = null;
+			}
+		}
+		float rebuildTime = (unit.team.rules().ai ? Mathf.lerp(15f, 2f, unit.team.rules().aiTier) : 2f) * 60f;
+
+		//find new request
+		if(!unit.team.data().blocks.isEmpty() //&& timer.get(timerTarget3, rebuildTime)
+		){
+			Queue<Teams.BlockPlan> blocks = unit.team.data().blocks;
+			Teams.BlockPlan block = blocks.first();
+
+			//check if it's already been placed
+			if(world.tile(block.x, block.y) != null && world.tile(block.x, block.y).block().id == block.block){
+				blocks.removeFirst();
+			}else if(Build.validPlace(content.block(block.block), unit.team(), block.x, block.y, block.rotation)){ //it's valid
+				lastPlan = block;
+				//add build request
+				unit.addBuild(new BuildPlan(block.x, block.y, block.rotation, content.block(block.block), block.config));
+				//shift build plan to tail so next unit builds something else
+				blocks.addLast(blocks.removeFirst());
+			}else{
+				//shift head of queue to tail, try something else next time
+				blocks.addLast(blocks.removeFirst());
+			}
+		}
+	}
+
 	//Yes, yes and yes. I literally copied the MinerAI.
 	protected void mineAI(Unit unit) {
 		Building core = unit.closestCore();

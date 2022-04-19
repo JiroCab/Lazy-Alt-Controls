@@ -1,16 +1,9 @@
 package newcontrols;
 
-import io.mnemotechnician.autoupdater.*;
-import arc.*;
-import arc.util.*;
-import arc.struct.*;
-import mindustry.*;
-import mindustry.game.*;
-import mindustry.mod.*;
-import mindustry.ui.dialogs.*;
-
-import newcontrols.*;
-import newcontrols.util.*;
+import arc.Events;
+import io.mnemotechnician.autoupdater.Updater;
+import mindustry.game.EventType;
+import mindustry.mod.Mod;
 
 public class NCMod extends Mod {
 	
