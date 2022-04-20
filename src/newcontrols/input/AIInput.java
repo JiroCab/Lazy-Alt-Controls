@@ -7,7 +7,7 @@ import arc.math.Mathf;
 import arc.math.geom.Geometry;
 import arc.math.geom.Position;
 import arc.math.geom.Vec2;
-import arc.scene.ui.layout.Table;
+import arc.scene.Group;
 import arc.struct.Queue;
 import arc.struct.Seq;
 import arc.util.Interval;
@@ -21,17 +21,16 @@ import mindustry.entities.Units;
 import mindustry.entities.units.BuildPlan;
 import mindustry.game.Teams;
 import mindustry.gen.*;
-import mindustry.graphics.Pal;
 import mindustry.input.Binding;
 import mindustry.input.InputHandler;
 import mindustry.type.Item;
 import mindustry.type.ItemStack;
 import mindustry.type.UnitType;
-import mindustry.ui.Styles;
 import mindustry.world.Build;
 import mindustry.world.Tile;
 import mindustry.world.blocks.ConstructBlock;
 import mindustry.world.meta.BlockFlag;
+import newcontrols.ui.fragments.ActionPanel;
 
 import static arc.Core.bundle;
 import static mindustry.Vars.*;
@@ -55,17 +54,22 @@ import static mindustry.Vars.*;
  * SERIOUSLY, DONT
  * I WARNED YOU
  * ...
+ *
+ * TODO -JiroCab
+ * fix hp threshold slider
+ * add button for shouldRetreat
+ * retreat ai
 **/
 public class AIInput extends InputHandler {
 
-	public enum AIAction {NONE, AUTO, ATTACK, MINE, BUILD, PATROL, IDLE, };
-	
+	public enum AIAction {NONE, AUTO, ATTACK, MINE, REPAIR, RETREAT, BUILD, PATROL, IDLE, }
+
 	public Interval updateInterval = new Interval(4);
 	public boolean paused = false, manualMode = false;
 	public float lastZoom = -1; //no idea
 	
 	//Whether these actions are enabled. todo: actually make this comprehensible?
-	public boolean attack = true, mine = true, build = true, patrol = true;
+	public boolean attack = true, mine = true, build = true, repair = true, retreat = true,  patrol = true;
 	
 	/** Current action selected by the user */
 	public AIAction current = AIAction.AUTO;
@@ -90,6 +94,8 @@ public class AIInput extends InputHandler {
 	public float attackRadius = 1200f;
 	public float mineRadius = 2f;
 	public float respawnThreshold = 5;
+	public boolean retreatInstead = false;
+
 
 	/** Items that won't be mined */
 	public Seq<Item> mineExclude = new Seq();
@@ -162,23 +168,32 @@ public class AIInput extends InputHandler {
 		}
 		return consumed;
 	}
-	
+	/* No longer used, will be moved in the setting menu
 	@Override
 	public void buildPlacementUI(Table table){
-		table.image().color(Pal.gray).height(4f).colspan(2).growX();
-		table.row();
-		table.left().margin(0f).defaults().size(48f). left();
-		
-		
-		table.button(b -> b.image(() -> paused ? Icon.pause.getRegion() : Icon.play.getRegion()), Styles.clearPartiali, () -> {
-			paused = !paused;
-		}).tooltip("@newcontrols.ai.toggle");
-		
-		table.button(Icon.move, Styles.clearTogglePartiali, () -> {
-			manualMode = !manualMode;
-		}).update(l -> l.setChecked(manualMode)).tooltip("@ai.manual-mode");
-	}
+    	table.image().color(Pal.gray).height(4f).colspan(2).growX();
+    	table.row();
+    	table.left().margin(0f).defaults().size(48f). left();
+   	 	table.button(b -> b.image(() -> paused ? Icon.pause.getRegion() : Icon.play.getRegion()), Styles.clearPartiali, () -> {
+       		 paused = !paused;
+    	}).tooltip("@newcontrols.ai.toggle");
 
+   		 table.button(Icon.move, Styles.clearTogglePartiali, () -> {
+		        manualMode = !manualMode;
+    		}).update(l -> l.setChecked(manualMode)).tooltip("@ai.manual-mode");
+     }	 */
+	@Override
+	public void buildUI(Group origin) {
+		super.buildUI(origin);
+		  if (manualMode)
+			origin.fill(t -> {
+				t.center().bottom();
+				ActionPanel.buildLandscape(t, this);
+			});
+		  else {
+			  origin.clear();
+		  }
+	}
 	//REGION CONTROLS
 	@Override
 	public void update() {
@@ -236,7 +251,15 @@ public class AIInput extends InputHandler {
 				break;
 			}
 		}
-		
+		boolean canHealBuilding = false;
+		for (var h : type.weapons) {
+			if (h.bullet.healPercent > 0 && h.bullet.collidesTeam) {
+				canHealBuilding = true;
+				break;
+			}
+		}
+		boolean shouldRetreat = unit.health <= respawnThreshold && retreatInstead;
+
 		Building core = unit.closestCore();
 		if (core != null && (updateInterval.get(2, 60) || mineItem == null)) {
 			mineItem = Item.getAllOres().min(i -> 
@@ -245,8 +268,12 @@ public class AIInput extends InputHandler {
 		}
 		
 		if (current == AIAction.AUTO && updateInterval.get(20)) {
-			if (attack && canAttack && (target = Units.closestTarget(unit.team, unit.x, unit.y, attackRadius > 0 ? attackRadius : Float.MAX_VALUE, t -> true)) != null) {
-				auto = AIAction.ATTACK;
+			if (retreat && shouldRetreat) {
+				auto = AIAction.RETREAT;
+			} else if (attack && canAttack && (target = Units.closestTarget(unit.team, unit.x, unit.y, attackRadius > 0 ? attackRadius : Float.MAX_VALUE, t -> true)) != null) {
+			auto = AIAction.ATTACK;
+			} else if (repair && canHealBuilding && (target = Units.findDamagedTile(unit.team, unit.x, unit.y)) != null) {
+				auto = AIAction.REPAIR;
 			} else if (build && unit.canBuild() && lastPlan != null ) {
 				auto = AIAction.BUILD;
 			} else if (mine && unit.canMine() && mineItem != null && indexer.findClosestOre(unit, mineItem) != null) {
@@ -257,13 +284,15 @@ public class AIInput extends InputHandler {
 				auto = AIAction.IDLE;
 			}
 		}
-		
+
 		AIAction action = current != AIAction.AUTO ? current : auto;
 		
 		switch (action) {
+			case RETREAT: patrolAI(unit); break;
 			case ATTACK: attackAI(unit); break;
 			case MINE: mineAI(unit); break;
 			case BUILD: buildAi(unit); break;
+			case REPAIR: repairAi(unit); break;
 			case PATROL: patrolAI(unit); break;
 		}
 		
@@ -346,55 +375,67 @@ public class AIInput extends InputHandler {
 		}
 	}
 
+	protected void repairAi(Unit unit) {
+		Building target = Units.findDamagedTile(unit.team, unit.x, unit.y);
+		if(target instanceof ConstructBlock.ConstructBuild) target = null;
+
+		if(target != null){
+		movement.set(target).add(Tmp.v1).sub(unit).limit(unit.speed());
+		player.shooting = unit.within(target, unit.range() );
+		aimLook(target);}
+		unit.movePref(movement);
+	}
+
 	//Yes, yes and yes. I literally copied the MinerAI.
 	protected void mineAI(Unit unit) {
 		Building core = unit.closestCore();
 		if(core == null) return;
-		
-		if (mining) {
-			//Core doesn't need this item
-			if (mineItem != null && core.acceptStack(mineItem, 1, unit) == 0) {
-				if (unit.stack.amount > 0) dropItem(player, unit.rotation);
-				mineItem = null;
-				return;
-			}
-			
-			//Mine
-			if (unit.stack.amount >= unit.type.itemCapacity || (mineItem != null && !unit.acceptsItem(mineItem))) {
-				mining = false;
+		if(unit.canMine()) { //to avoid forcing units who can't mine to mine at all
+			if (mining) {
+				//Core doesn't need this item
+				if (mineItem != null && core.acceptStack(mineItem, 1, unit) == 0) {
+					if (unit.stack.amount > 0) dropItem(player, unit.rotation);
+					mineItem = null;
+					return;
+				}
+
+				//Mine
+				if (unit.stack.amount >= unit.type.itemCapacity || (mineItem != null && !unit.acceptsItem(mineItem))) {
+					mining = false;
+				} else {
+					if (updateInterval.get(3, 30) && mineItem != null) {
+						mineTile = indexer.findClosestOre(unit, mineItem);
+					}
+
+					if (mineTile != null) {
+						movement.set(0, 0).trns(mineTile.angleTo(unit), mineRadius).add(mineTile).sub(unit).limit(unit.speed());
+						unit.movePref(movement);
+						aimLook(Tmp.v1.set(mineTile).scl(8));
+
+						if (mineTile.block() == Blocks.air && unit.within(mineTile, unit.type.miningRange)) {
+							unit.mineTile = mineTile;
+						}
+
+						if (mineTile.block() != Blocks.air) {
+							mining = false;
+						}
+					}
+				}
 			} else {
-				if (updateInterval.get(3, 30) && mineItem != null) {
-					mineTile = indexer.findClosestOre(unit, mineItem);
+				//Unload to core
+				if (unit.stack.amount == 0) {
+					mining = true;
+					return;
 				}
-				
-				if(mineTile != null){
-					movement.set(0, 0).trns(mineTile.angleTo(unit), mineRadius).add(mineTile).sub(unit).limit(unit.speed());
-					unit.movePref(movement);
-					aimLook(Tmp.v1.set(mineTile).scl(8));
-					
-					if (mineTile.block() == Blocks.air && unit.within(mineTile, unit.type.miningRange)) {
-						unit.mineTile = mineTile;
-					}
-					
-					if (mineTile.block() != Blocks.air) {
-						mining = false;
-					}
+
+				if (core.acceptStack(unit.stack.item, unit.stack.amount, unit) > 0) {
+					tryDropItems(core, player.x, player.y);
 				}
+
+				movement.set(core).sub(unit).limit(unit.speed());
+				unit.movePref(movement);
+				aimLook(core);
 			}
-		} else {
-			//Unload to core
-			if (unit.stack.amount == 0) {
-				mining = true;
-				return;
-			}
-			
-			if (core.acceptStack(unit.stack.item, unit.stack.amount, unit) > 0) {
-				tryDropItems(core, player.x, player.y);
-			}
-			
-			movement.set(core).sub(unit).limit(unit.speed());
-			unit.movePref(movement);
-			aimLook(core);
 		}
 	}
 	

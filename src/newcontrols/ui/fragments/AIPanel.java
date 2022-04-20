@@ -12,6 +12,7 @@ import mindustry.ui.Styles;
 import mindustry.ui.fragments.Fragment;
 import newcontrols.input.AIInput;
 import newcontrols.input.AIInput.AIAction;
+import newcontrols.ui.Joystick;
 import newcontrols.ui.NiceSlider;
 import newcontrols.ui.Spinner;
 import newcontrols.ui.Toggle;
@@ -80,8 +81,10 @@ public class AIPanel extends Fragment {
 							s.button("@newcontrols.ai.action-AUTO-TYPE", Styles.clearPartialt, () -> ai.current = AIAction.AUTO).row();
 							s.button("@newcontrols.ai.action-ATTACK", Styles.clearPartialt, () -> ai.current = AIAction.ATTACK).row();
 							s.button("@newcontrols.ai.action-MINE", Styles.clearPartialt, () -> ai.current = AIAction.MINE).row();
-							s.button("@newcontrols.ai.action-PATROL", Styles.clearPartialt, () -> ai.current = AIAction.PATROL).row();
 							s.button("@newcontrols.ai.action-BUILD", Styles.clearPartialt, () -> ai.current = AIAction.BUILD).row();
+							s.button("@newcontrols.ai.action-REPAIR", Styles.clearPartialt, () -> ai.current = AIAction.REPAIR).row();
+							s.button("@newcontrols.ai.action-RETREAT", Styles.clearPartialt, () -> ai.current = AIAction.RETREAT).row();
+							s.button("@newcontrols.ai.action-PATROL", Styles.clearPartialt, () -> ai.current = AIAction.PATROL).row();
 
 						})).growX().row();
 						
@@ -91,8 +94,10 @@ public class AIPanel extends Fragment {
 							s.defaults().growX().height(40f);
 							s.add(new Toggle("@newcontrols.ai.action-ATTACK", true, enabled -> ai.attack = enabled)).row();
 							s.add(new Toggle("@newcontrols.ai.action-MINE", true, enabled -> ai.mine = enabled)).row();
+							s.add(new Toggle("@newcontrols.ai.action-BUILD", true, enabled -> ai.build = enabled)).row();
+							s.add(new Toggle("@newcontrols.ai.action-REPAIR", true, enabled -> ai.repair = enabled)).row();
+							s.add(new Toggle("@newcontrols.ai.action-REPAIR", true, enabled -> ai.retreat = enabled)).row();
 							s.add(new Toggle("@newcontrols.ai.action-PATROL", true, enabled -> ai.patrol = enabled)).row();
-							s.add(new Toggle("@newcontrols.ai.action-BUILD", true, enabled -> ai.patrol = enabled)).row();
 
 						})).growX().row();
 						
@@ -100,7 +105,9 @@ public class AIPanel extends Fragment {
 						actions.add((Element) new Spinner("@newcontrols.ai.actions-preferences", s -> {
 							
 							s.defaults().growX().height(40f);
-							
+							//Mobile JoyStick
+
+
 							//Attack range
 							s.add(new NiceSlider("@newcontrols.ai.prefs.attack-radius", 0, 1200, 16, radius -> {
 								ai.attackRadius = radius;
@@ -116,11 +123,11 @@ public class AIPanel extends Fragment {
 							.process(v -> Math.round(v / 8) + " " + bundle.get("unit.blocks"))).growX().row();
 
 							//Hp threshold respawn
-							s.add(new NiceSlider("@newcontrols.ai.prefs.hp-respawn", 0, 101, 5, percent -> {
+							s.add(new NiceSlider("@newcontrols.ai.prefs.hp-respawn", 0, 100, 16, percent -> {
 								ai.respawnThreshold = percent;
 							})
-							.max(() -> Vars.player.unit().type == null ? 100 : Vars.player.unit().type.health)
-							.process(v -> v <= 0 ? bundle.get("newcontrols.unit.noautorespawn") : Math.round(v / 100) + "%" )).growX().row();
+							.max(() -> Vars.player.unit().type == null ? 0 : 100)
+							.process(v -> v <= 0 ? bundle.get("newcontrols.unit.noautorespawn") : Math.round(v) + "%" )).growX().row();
 							
 							//Items selection
 							s.add((Element) new Spinner("@newcontrols.ai.prefs.mine-items", items -> {
@@ -150,8 +157,34 @@ public class AIPanel extends Fragment {
 				
 			}).visible(() -> shown).padLeft(8f).row();
 
+			//movement joystick
+			table.collapser(c -> {
+				Joystick move = new Joystick();
+				c.add(move).size(200);
+				move.used(pos -> {
+					ai.moveDir.set(pos);
+				});
+			}, true, () -> enabled && ai.manualMode);
+		});
+
+		//aim & shoot joystick
+		parent.fill(table -> {
+
+			table.center().right();
+
+			table.collapser(c -> {
+				ActionPanel.buildPortrait(c, ai);
+				c.row();
+
+				Joystick shoot = new Joystick();
+				c.add(shoot).size(200);
+				shoot.used(pos -> {
+					ai.shootDir.set(pos);
+					ai.shoot = true;
+				});
+			}, true, () -> enabled && ai.manualMode);
 		});
 
 	}
-	
+
 }
