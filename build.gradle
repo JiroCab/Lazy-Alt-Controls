@@ -65,7 +65,7 @@ jar{
 
     from(rootDir){
         include "mod.hjson"
-        include "icon.png"
+        //include "icon.png" //Will make new icon
     }
 
     from("assets/"){

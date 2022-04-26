@@ -8,13 +8,13 @@ To enable the controls: press the 🔧 (wrench) button while in-game. You will s
 ### Important notice
 While the controls are enabled, you won't be able to perform some actions that are possible in vanilla mode (such as building). You can disable & enable the controls at any time so that shouldn't be a problem.
 
-# Manual/Mobile mode
-There is No Manual/Mobile mode as of writing
+#Mobile mode
+Mobile mode is half working, Aim And move joystick only no action pannel for now
 
 # Ai mode
 Can be enabled by disabling a toggle in the placement ui (right bottom corner). Reveals an ai control panel under the status label. Consists of these modes:
 * auto: performs one of following based on situation, in top to bottom priority 
-* retreat: retreat to the nearest heal point when hp is bellow a threshold percent (off by default, see notes) (not implemented)
+* ~~retreat: retreat to the nearest heal point when hp is bellow a threshold percent (off by default, see notes)~~ **(not implemented)**
 * attack: targets the nearest units & buildings in a specified radius, keeps maximum possible distance
 * repair: heal damaged blocks, only if unit's weapons can
 * mine: automatically mines specified items
@@ -23,5 +23,4 @@ Can be enabled by disabling a toggle in the placement ui (right bottom corner). 
 
 #Notes
 * When hp is bellow 'Respawn threshold' either your instantly respawn to your core (to save time) or you'll retreat to a heal point (not implemented)
-* Some actions can be configured in the left panel.
 * Mine and Build radius use the same slider
