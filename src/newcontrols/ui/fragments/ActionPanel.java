@@ -19,42 +19,44 @@ public class ActionPanel {
 
     //landscape, displayed on the bottom
     public static void buildLandscape(Table origin, final AIInput input) {
-        origin.collapser(table -> {
-            table.table(dangerous -> {
-                dangerous.defaults().height(55);
+        if(input.manualMode){ //Dont want to show this when in Ai mode
+            origin.collapser(table -> {
+                table.table(dangerous -> {
+                    dangerous.defaults().height(55);
 
-                dangerous.button("@newcontrols.manual.pay-enter", Styles.nodet, () -> payloadEnter()).width(120);
-            }).row();
+                    dangerous.button("@newcontrols.manual.pay-enter", Styles.nodet, () -> payloadEnter()).width(120);}).row();
 
-            table.table(generic -> {
-                generic.defaults().height(55);
+                table.table(generic -> {
+                    generic.defaults().height(55);
 
-                generic.button("@newcontrols.manual.command", Styles.nodet, () -> {
-                    Call.unitCommand(player);
-                }).width(120).disabled(b -> player.dead() || player.unit().type.commandLimit < 1);
+                    generic.button("@newcontrols.manual.command", Styles.nodet, () -> {
+                        Call.unitCommand(player);
+                    }).width(120).disabled(b -> player.dead() || player.unit().type.commandLimit < 1);
 
-                generic.button(makeRegion("newcontrols-arrow-up"), Styles.clearTogglei, () -> {
-                    player.boosting = !player.boosting;
-                }).size(55).update(b -> b.setChecked(player.boosting && player.unit().type.canBoost));
-            }).row();
+                    generic.button(makeRegion("newcontrols-arrow-up"), Styles.clearTogglei, () -> {
+                        player.boosting = !player.boosting;
+                   }).size(55).update(b -> b.setChecked(player.boosting && player.unit().type.canBoost));}).row();
 
-            table.table(payloads -> {
-                payloads.defaults().size(160, 55);
+                table.table(payloads -> {
+                    payloads.defaults().size(160, 55);
 
-                payloads.button("@newcontrols.manual.pickup-unit", Styles.nodet, () -> unitPickup())
-                        .disabled(b -> !(player.unit() instanceof Payloadc));
+                    payloads.button("@newcontrols.manual.pickup-unit", Styles.nodet, () -> unitPickup())
+                            .disabled(b -> !(player.unit() instanceof Payloadc));
 
-                payloads.button("@newcontrols.manual.pickup-block", Styles.nodet, () -> buildPickup())
-                        .disabled(b -> !(player.unit() instanceof Payloadc));
+                    payloads.button("@newcontrols.manual.pickup-block", Styles.nodet, () -> buildPickup())
+                            .disabled(b -> !(player.unit() instanceof Payloadc));
 
-                payloads.button("@newcontrols.manual.drop", Styles.nodet, () -> input.tryDropPayload())
-                        .disabled(b -> !(player.unit() instanceof Payloadc pay) || !pay.hasPayload());
-            }).row();
-        }, () -> !Core.graphics.isPortrait());
-    }
+                    payloads.button("@newcontrols.manual.drop", Styles.nodet, () -> input.tryDropPayload())
+                        .disabled(b -> !(player.unit() instanceof Payloadc pay) || !pay.hasPayload());}).row();
+            }, () -> !Core.graphics.isPortrait());
+        }
+        else {
+        origin.clear();
+         } }
 
     //portrait, displayed above right thumbstick
-    public static void buildPortrait(Table origin, final AIInput input) {
+    public static void buildPortrait(Table origin, final AIInput input)
+    {if(input.manualMode){
         origin.collapser(table -> {
             table.table(dangerous -> {
                 dangerous.defaults().size(50);
@@ -88,6 +90,9 @@ public class ActionPanel {
             });
         }, () -> Core.graphics.isPortrait());
     }
+    else {
+        origin.clear();
+    } }
 
     protected static void unitPickup() {
         Unit self = player.unit();

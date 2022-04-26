@@ -20,7 +20,10 @@ import mindustry.entities.Predict;
 import mindustry.entities.Units;
 import mindustry.entities.units.BuildPlan;
 import mindustry.game.Teams;
-import mindustry.gen.*;
+import mindustry.gen.Building;
+import mindustry.gen.Call;
+import mindustry.gen.Teamc;
+import mindustry.gen.Unit;
 import mindustry.input.Binding;
 import mindustry.input.InputHandler;
 import mindustry.type.Item;
@@ -59,6 +62,8 @@ import static mindustry.Vars.*;
  * fix hp threshold slider
  * add button for shouldRetreat
  * retreat ai
+ * configurable maxRange offset when attacking
+ * toggle attack buildings
 **/
 public class AIInput extends InputHandler {
 
@@ -117,17 +122,18 @@ public class AIInput extends InputHandler {
 		if (cursor == null || Core.scene.hasMouse(x, y)) return false;
 		
 		Call.tileTap(player, cursor);
-		Tile linked = cursor.build == null ? cursor : cursor.build.tile;
+		//Tile linked = cursor.build == null ? cursor : cursor.build.tile;
 
-		tileTappedH(linked.build);
+		//tileTappedH(linked.build);
 		
 		unitTapped = selectedUnit();
 		buildingTapped = selectedControlBuild();
 		
 		return false;
 	}
-	
-	/** @Anuke#4986 why the fuck does this method has default visibility */
+
+	/* No longer used, will be moved in the setting menu
+   // @Anuke#4986 why the fuck does this method has default visibility
 	protected boolean tileTappedH(Building build) {
 		if (build == null) {
 			frag.inv.hide();
@@ -168,7 +174,7 @@ public class AIInput extends InputHandler {
 		}
 		return consumed;
 	}
-	/* No longer used, will be moved in the setting menu
+
 	@Override
 	public void buildPlacementUI(Table table){
     	table.image().color(Pal.gray).height(4f).colspan(2).growX();
@@ -181,7 +187,7 @@ public class AIInput extends InputHandler {
    		 table.button(Icon.move, Styles.clearTogglePartiali, () -> {
 		        manualMode = !manualMode;
     		}).update(l -> l.setChecked(manualMode)).tooltip("@ai.manual-mode");
-     }	 */
+     }*/
 	@Override
 	public void buildUI(Group origin) {
 		super.buildUI(origin);
@@ -194,6 +200,7 @@ public class AIInput extends InputHandler {
 			  origin.clear();
 		  }
 	}
+
 	//REGION CONTROLS
 	@Override
 	public void update() {
@@ -315,7 +322,18 @@ public class AIInput extends InputHandler {
 		 	float bulletSpeed = unit.hasWeapons() ? type.weapons.first().bullet.speed : 0;
 
 			float approachRadius = 0.95f;
+			float approachRadiusClose = 0.50f;
+			boolean useCloseApproach = false;
+			for(var r : type.weapons) {
+				if (r.minShootVelocity <= 0) {
+					useCloseApproach = true;
+					break;
+				}
+			}
 			float dist = unit.range() * approachRadius;
+			if (useCloseApproach) {
+				dist = unit.range() * approachRadiusClose;
+			}
 			float angle = target.angleTo(unit);
 			Tmp.v1.set(Angles.trnsx(angle, dist), Angles.trnsy(angle, dist));
 			movement.set(target).add(Tmp.v1).sub(unit).limit(unit.speed());
@@ -382,8 +400,8 @@ public class AIInput extends InputHandler {
 		if(target != null){
 		movement.set(target).add(Tmp.v1).sub(unit).limit(unit.speed());
 		player.shooting = unit.within(target, unit.range() );
-		aimLook(target);}
-		unit.movePref(movement);
+		aimLook(target);
+		unit.movePref(movement);}
 	}
 
 	//Yes, yes and yes. I literally copied the MinerAI.

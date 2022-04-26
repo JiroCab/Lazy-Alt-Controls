@@ -32,11 +32,11 @@ public class AIPanel extends Fragment {
 	
 	@Override
 	public void build(Group parent) {
+
 		parent.fill(table -> {
-			
+
 			table.center().left();
 			table.name = "ai-panel";
-			
 			table.button(Icon.wrench, Styles.clearTransi, () -> shown = !shown).size(dsize).left().row();
 			
 			table.table(Styles.black3, panel -> {
@@ -72,7 +72,7 @@ public class AIPanel extends Fragment {
 					}).row();
 					
 					control.collapser(actions -> {
-						
+
 						actions.add("@newcontrols.ai.settings").row();
 						//action selection
 						actions.add((Element) new Spinner("@newcontrols.ai.actions-select", s -> {
@@ -96,16 +96,16 @@ public class AIPanel extends Fragment {
 							s.add(new Toggle("@newcontrols.ai.action-MINE", true, enabled -> ai.mine = enabled)).row();
 							s.add(new Toggle("@newcontrols.ai.action-BUILD", true, enabled -> ai.build = enabled)).row();
 							s.add(new Toggle("@newcontrols.ai.action-REPAIR", true, enabled -> ai.repair = enabled)).row();
-							s.add(new Toggle("@newcontrols.ai.action-REPAIR", true, enabled -> ai.retreat = enabled)).row();
+							s.add(new Toggle("@newcontrols.ai.action-RETREAT", true, enabled -> ai.retreat = enabled)).row();
 							s.add(new Toggle("@newcontrols.ai.action-PATROL", true, enabled -> ai.patrol = enabled)).row();
 
 						})).growX().row();
-						
+
+
 						//preferences
 						actions.add((Element) new Spinner("@newcontrols.ai.actions-preferences", s -> {
-							
+
 							s.defaults().growX().height(40f);
-							//Mobile JoyStick
 
 
 							//Attack range
@@ -114,7 +114,7 @@ public class AIPanel extends Fragment {
 							})
 							.max(() -> Vars.player.unit().type == null ? 1200 : Vars.player.unit().range() * 5)
 							.process(v -> v <= 0 ? bundle.get("newcontrols.unit.nolimit") : Math.round(v / 8) + " " + bundle.get("unit.blocks"))).growX().row();
-							
+
 							//mining range
 							s.add(new NiceSlider("@newcontrols.ai.prefs.mine-radius", 0, 10, 4, radius -> {
 								ai.mineRadius = radius;
@@ -123,24 +123,24 @@ public class AIPanel extends Fragment {
 							.process(v -> Math.round(v / 8) + " " + bundle.get("unit.blocks"))).growX().row();
 
 							//Hp threshold respawn
-							s.add(new NiceSlider("@newcontrols.ai.prefs.hp-respawn", 0, 100, 16, percent -> {
+							s.add(new NiceSlider("@newcontrols.ai.prefs.hp-respawn", 0, 100, 1, percent -> {
 								ai.respawnThreshold = percent;
 							})
 							.max(() -> Vars.player.unit().type == null ? 0 : 100)
 							.process(v -> v <= 0 ? bundle.get("newcontrols.unit.noautorespawn") : Math.round(v) + "%" )).growX().row();
-							
+
 							//Items selection
 							s.add((Element) new Spinner("@newcontrols.ai.prefs.mine-items", items -> {
 								items.center().top();
-								
+
 								Item.getAllOres().each(i -> {
 									final Item item = i; //else it cannot be used in lambdas
 									boolean shouldMine = UnitTypes.gamma.mineItems.contains(i);
-									
+
 									if (!shouldMine) ai.mineExclude.add(i);
 									items.add(new Toggle(i.emoji(), shouldMine, enabled -> {
 										if (enabled) {
-											ai.mineExclude.remove(item); 
+											ai.mineExclude.remove(item);
 										} else {
 											ai.mineExclude.add(item);
 										}
@@ -148,25 +148,29 @@ public class AIPanel extends Fragment {
 									if (items.getChildren().size % 6 == 0) items.row();
 								});
 							})).growX();
-							
+
 						})).growX().row();
-						
-					}, true, () -> !ai.manualMode).growX().row();
-					
+						//Mobile JoyStick
+						actions.button(Icon.logic, Styles.clearTransi, () -> ai.manualMode = !ai.manualMode).growX().row();
+					}, true, () -> true).growX().row();
+
 				}, true, () -> enabled).growX().row();
 				
 			}).visible(() -> shown).padLeft(8f).row();
 
-			//movement joystick
+
+		});
+		//movement joystick, like this to try not to be wonky
+		parent.fill(table -> {
+			table.center().left();
 			table.collapser(c -> {
 				Joystick move = new Joystick();
 				c.add(move).size(200);
 				move.used(pos -> {
-					ai.moveDir.set(pos);
-				});
-			}, true, () -> enabled && ai.manualMode);
+				ai.moveDir.set(pos);
+			});
+		}, true, () -> enabled && ai.manualMode);
 		});
-
 		//aim & shoot joystick
 		parent.fill(table -> {
 
