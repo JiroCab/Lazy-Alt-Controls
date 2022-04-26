@@ -8,7 +8,7 @@ To enable the controls: press the 🔧 (wrench) button while in-game. You will s
 ### Important notice
 While the controls are enabled, you won't be able to perform some actions that are possible in vanilla mode (such as building). You can disable & enable the controls at any time so that shouldn't be a problem.
 
-#Mobile mode
+# Mobile mode
 Mobile mode is half working, Aim And move joystick only no action pannel for now
 
 # Ai mode

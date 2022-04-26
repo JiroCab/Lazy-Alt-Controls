@@ -1,10 +1,11 @@
 #!VERSION 1.04
 #!BRANCH "master"
+#!REPO "JiroCab/Lazy-Alt-Controls"
 
 
-displayName: "Ai Alt controls"
+displayName: "Lazy Alt controls"
 name: "ai-controls"
-author: "JiroDoesStuff/Rush, Мнемотехник"
+author: "JiroCab/Rush, Мнемотехник"
 description: "(Wip) Fork of 'Mnemotechnician/New-Controls-Public' that focuses on the Ai part. Ai will attack, mine, rebuild & patrol \n\n tailored for Desktop for maximume lazyness or afk"
 version: 1.0.0
 minGameVersion: 134
