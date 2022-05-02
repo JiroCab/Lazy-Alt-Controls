@@ -33,6 +33,7 @@ public class AIPanel extends Fragment {
 	@Override
 	public void build(Group parent) {
 
+		//Main menu (wrench)
 		parent.fill(table -> {
 
 			table.center().left();
@@ -42,15 +43,16 @@ public class AIPanel extends Fragment {
 			table.table(Styles.black3, panel -> {
 				
 				panel.add("@newcontrols.ai.header").colspan(2).row();
+				/*
 				panel.table(h -> {
 					
 					h.add("@newcontrols.ai.status").padRight(5f);
-					
+
 					Prov<CharSequence> lText = () -> enabled ? "@newcontrols.ai.enabled-ai" : "@newcontrols.ai.disabled";
 					h.label(lText).height(60f).with(l -> {
 						l.clicked(() -> {
 							enabled = !enabled;
-							
+
 							if (enabled) {
 								lastHandler = Vars.control.input;
 								Vars.control.setInput(ai);
@@ -61,10 +63,12 @@ public class AIPanel extends Fragment {
 						});
 						l.setStyle(Styles.techLabel);
 					});
-					
+
 				}).padLeft(8f).row();
-				
-				panel.collapser(control -> {
+
+
+					 */
+					panel.collapser(control -> {
 					
 					control.table(h -> {
 						h.add("@newcontrols.ai.action").padRight(5f);
@@ -106,7 +110,6 @@ public class AIPanel extends Fragment {
 						actions.add((Element) new Spinner("@newcontrols.ai.actions-preferences", s -> {
 
 							s.defaults().growX().height(40f);
-
 
 							//Attack range
 							s.add(new NiceSlider("@newcontrols.ai.prefs.attack-radius", 0, 1200, 16, radius -> {
@@ -150,7 +153,7 @@ public class AIPanel extends Fragment {
 							})).growX();
 
 						})).growX().row();
-						//Mobile JoyStick
+						//Mobile JoyStick toggle
 						actions.button(Icon.logic, Styles.clearTransi, () -> ai.manualMode = !ai.manualMode).growX().row();
 					}, true, () -> true).growX().row();
 
@@ -160,7 +163,7 @@ public class AIPanel extends Fragment {
 
 
 		});
-		//movement joystick, like this to try not to be wonky
+		//movement joystick, Moved here to avoid wonkiness
 		parent.fill(table -> {
 			table.center().left();
 			table.collapser(c -> {
@@ -171,6 +174,7 @@ public class AIPanel extends Fragment {
 			});
 		}, true, () -> enabled && ai.manualMode);
 		});
+
 		//aim & shoot joystick
 		parent.fill(table -> {
 
