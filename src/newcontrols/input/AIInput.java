@@ -63,8 +63,7 @@ import static mindustry.Vars.*;
  * add button for shouldRetreat
  * retreat ai
  * configurable maxRange offset when attacking
- * toggle attack buildings maybe
- * try to removing hide data base & map etc
+ * toggle attack buildings
 **/
 public class AIInput extends InputHandler {
 
@@ -127,8 +126,8 @@ public class AIInput extends InputHandler {
 
 		//tileTappedH(linked.build);
 		
-		//unitTapped = selectedUnit();
-		//buildingTapped = selectedControlBuild();
+		unitTapped = selectedUnit();
+		buildingTapped = selectedControlBuild();
 		
 		return false;
 	}
