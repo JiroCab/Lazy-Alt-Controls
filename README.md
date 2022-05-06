@@ -23,4 +23,5 @@ Can be enabled by disabling a toggle in the placement ui (right bottom corner). 
 
 #Notes
 * When hp is bellow 'Respawn threshold' either your instantly respawn to your core (to save time) or you'll retreat to a heal point (not implemented)
-* Mine and Build radius use the same slider
+* Desktop Shortcuts should still 
+* Panning is a thing and acts like you moving

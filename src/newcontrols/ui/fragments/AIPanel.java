@@ -43,10 +43,9 @@ public class AIPanel extends Fragment {
 			table.table(Styles.black3, panel -> {
 				
 				panel.add("@newcontrols.ai.header").colspan(2).row();
-				/*
 				panel.table(h -> {
 					
-					h.add("@newcontrols.ai.status").padRight(5f);
+					h.add("@newcontrols.ai.status").padRight(1f);
 
 					Prov<CharSequence> lText = () -> enabled ? "@newcontrols.ai.enabled-ai" : "@newcontrols.ai.disabled";
 					h.label(lText).height(60f).with(l -> {
@@ -67,7 +66,6 @@ public class AIPanel extends Fragment {
 				}).padLeft(8f).row();
 
 
-					 */
 					panel.collapser(control -> {
 					
 					control.table(h -> {
@@ -105,33 +103,27 @@ public class AIPanel extends Fragment {
 
 						})).growX().row();
 
-
 						//preferences
 						actions.add((Element) new Spinner("@newcontrols.ai.actions-preferences", s -> {
-
 							s.defaults().growX().height(40f);
 
 							//Attack range
-							s.add(new NiceSlider("@newcontrols.ai.prefs.attack-radius", 0, 1200, 16, radius -> {
-								ai.attackRadius = radius;
-							})
+							s.add(new NiceSlider("@newcontrols.ai.prefs.attack-radius", 0, 1200, 16, radius -> ai.attackRadius = radius)
 							.max(() -> Vars.player.unit().type == null ? 1200 : Vars.player.unit().range() * 5)
 							.process(v -> v <= 0 ? bundle.get("newcontrols.unit.nolimit") : Math.round(v / 8) + " " + bundle.get("unit.blocks"))).growX().row();
 
 							//mining range
-							s.add(new NiceSlider("@newcontrols.ai.prefs.mine-radius", 0, 10, 4, radius -> {
-								ai.mineRadius = radius;
-							})
+							s.add(new NiceSlider("@newcontrols.ai.prefs.mine-radius", 0, 10, 4, radius -> ai.mineRadius = radius)
 							.max(() -> Vars.player.unit().type == null ? 100 : Vars.player.unit().type.miningRange)
 							.process(v -> Math.round(v / 8) + " " + bundle.get("unit.blocks"))).growX().row();
 
 							//Hp threshold respawn
-							s.add(new NiceSlider("@newcontrols.ai.prefs.hp-respawn", 0, 100, 1, percent -> {
-								ai.respawnThreshold = percent;
-							})
-							.max(() -> Vars.player.unit().type == null ? 0 : 100)
+							s.add(new NiceSlider("@newcontrols.ai.prefs.hp-respawn", 0, 100, 5, percent -> ai.respawnThreshold = percent)
+							.max(() -> 100)
 							.process(v -> v <= 0 ? bundle.get("newcontrols.unit.noautorespawn") : Math.round(v) + "%" )).growX().row();
 
+							//Retreat Instead of Respawn
+							s.add(new Toggle(Icon.commandAttackSmall, Icon.commandRallySmall, "@newcontrols.ai.prefs.retreat_instead", toggle -> ai.retreatInstead = !ai.retreatInstead, Styles.clearPartialt)).growX().row();
 							//Items selection
 							s.add((Element) new Spinner("@newcontrols.ai.prefs.mine-items", items -> {
 								items.center().top();
@@ -169,12 +161,9 @@ public class AIPanel extends Fragment {
 			table.collapser(c -> {
 				Joystick move = new Joystick();
 				c.add(move).size(200);
-				move.used(pos -> {
-				ai.moveDir.set(pos);
-			});
+				move.used(pos -> ai.moveDir.set(pos));
 		}, true, () -> enabled && ai.manualMode);
 		});
-
 		//aim & shoot joystick
 		parent.fill(table -> {
 

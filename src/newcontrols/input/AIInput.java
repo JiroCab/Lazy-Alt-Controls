@@ -1,6 +1,9 @@
 package newcontrols.input;
 
 import arc.Core;
+import arc.graphics.Color;
+import arc.graphics.g2d.Draw;
+import arc.graphics.g2d.Lines;
 import arc.input.KeyCode;
 import arc.math.Angles;
 import arc.math.Mathf;
@@ -8,34 +11,39 @@ import arc.math.geom.Geometry;
 import arc.math.geom.Position;
 import arc.math.geom.Vec2;
 import arc.scene.Group;
+import arc.scene.ui.TextField;
+import arc.scene.ui.layout.Table;
 import arc.struct.Queue;
 import arc.struct.Seq;
 import arc.util.Interval;
 import arc.util.Nullable;
+import arc.util.Time;
 import arc.util.Tmp;
 import mindustry.Vars;
 import mindustry.ai.Pathfinder;
 import mindustry.content.Blocks;
+import mindustry.core.World;
 import mindustry.entities.Predict;
 import mindustry.entities.Units;
 import mindustry.entities.units.BuildPlan;
 import mindustry.game.Teams;
-import mindustry.gen.Building;
-import mindustry.gen.Call;
-import mindustry.gen.Teamc;
-import mindustry.gen.Unit;
+import mindustry.gen.*;
+import mindustry.graphics.Pal;
 import mindustry.input.Binding;
 import mindustry.input.InputHandler;
 import mindustry.type.Item;
 import mindustry.type.ItemStack;
 import mindustry.type.UnitType;
+import mindustry.ui.Styles;
 import mindustry.world.Build;
 import mindustry.world.Tile;
 import mindustry.world.blocks.ConstructBlock;
 import mindustry.world.meta.BlockFlag;
+import newcontrols.ui.fragments.AIPanel;
 import newcontrols.ui.fragments.ActionPanel;
 
-import static arc.Core.bundle;
+import static arc.Core.*;
+import static arc.Core.input;
 import static mindustry.Vars.*;
 
 /** 
@@ -68,7 +76,7 @@ import static mindustry.Vars.*;
 **/
 public class AIInput extends InputHandler {
 
-	public enum AIAction {NONE, AUTO, ATTACK, MINE, REPAIR, RETREAT, BUILD, PATROL, IDLE, }
+	public enum AIAction {NONE, AUTO, ATTACK, MINE, REPAIR, RETREAT, BUILD, PATROL, IDLE }
 
 	public Interval updateInterval = new Interval(4);
 	public boolean paused = false, manualMode = false;
@@ -87,7 +95,8 @@ public class AIInput extends InputHandler {
 	public Item mineItem = null;
 	public boolean mining = false;
 	public Tile patrolTile = null;
-	
+	public Tile retreatTile = null;
+
 	//resetting
 	/** Current movement direction, used for manual control. -1 to 1. Reset every frame. */
 	public Vec2 moveDir = new Vec2();
@@ -111,7 +120,28 @@ public class AIInput extends InputHandler {
 	
 	public static Vec2 movement = new Vec2();
 
+	//Building related stuff
 	public @Nullable Teams.BlockPlan lastPlan;
+	/** Selected build request for movement. */
+	public @Nullable BuildPlan sreq;
+	/** Position where the player started dragging a line. */
+	public int selectX = -1, selectY = -1, schemX = -1, schemY = -1;
+	/** Maximum line length. */
+	final static int maxLength = 100;
+	int tileX(float cursorX){
+		Vec2 vec = Core.input.mouseWorld(cursorX, 0);
+		if(selectedBlock()){vec.sub(block.offset, block.offset);}
+		return World.toTile(vec.x);
+	}
+	int tileY(float cursorY){
+		Vec2 vec = Core.input.mouseWorld(0, cursorY);
+		if(selectedBlock()){vec.sub(block.offset, block.offset);}
+		return World.toTile(vec.y);
+	}
+	/** Mouse pan speed. */
+	public float panScale = 0.005f, panSpeed = 4.5f, panBoostSpeed = 15f;
+	/** Whether player is currently deleting removal requests. */
+	public boolean deleting = false, shouldShoot = false, panning = false;
 
 	@Override
 	public boolean tap(float x, float y, int count, KeyCode button){
@@ -120,26 +150,25 @@ public class AIInput extends InputHandler {
 		float worldx = Core.input.mouseWorld(x, y).x, worldy = Core.input.mouseWorld(x, y).y;
 		Tile cursor = Vars.world.tile(Math.round(worldx / 8), Math.round(worldy / 8));
 		
-		if (cursor == null || Core.scene.hasMouse(x, y)) return false;
+		if (cursor == null || scene.hasMouse(x, y)) return false;
 		
 		Call.tileTap(player, cursor);
-		//Tile linked = cursor.build == null ? cursor : cursor.build.tile;
+		Tile linked = cursor.build == null ? cursor : cursor.build.tile;
 
-		//tileTappedH(linked.build);
+		tileTappedH(linked.build);
 		
-		//unitTapped = selectedUnit();
-		//buildingTapped = selectedControlBuild();
+		unitTapped = selectedUnit();
+		buildingTapped = selectedControlBuild();
 		
 		return false;
 	}
 
-	/* No longer used, will be moved in the setting menu
    // @Anuke#4986 why the fuck does this method has default visibility
-	protected boolean tileTappedH(Building build) {
+	protected void tileTappedH(Building build) {
 		if (build == null) {
 			frag.inv.hide();
 			frag.config.hideConfig();
-			return false;
+			return;
 		}
 		boolean consumed = false, showedInventory = false;
 		if (build.block.configurable && build.interactable(player.team())) {
@@ -173,11 +202,25 @@ public class AIInput extends InputHandler {
 		if (!showedInventory) {
 			frag.inv.hide();
 		}
-		return consumed;
 	}
 
 	@Override
 	public void buildPlacementUI(Table table){
+		table.image().color(Pal.gray).height(4f).colspan(4).growX();
+		table.row();
+		table.left().margin(0f).defaults().size(48f).left();
+
+		table.button(Icon.paste, Styles.clearPartiali, () -> ui.schematics.show()).tooltip("@schematics");
+
+		table.button(Icon.book, Styles.clearPartiali, () -> ui.database.show()).tooltip("@database");
+
+		table.button(Icon.tree, Styles.clearPartiali, () -> ui.research.show()).visible(() -> state.isCampaign()).tooltip("@research");
+
+		table.button(Icon.map, Styles.clearPartiali, () -> ui.planet.show()).visible(() -> state.isCampaign()).tooltip("@planetmap");
+
+		/* Removes the old one for the one from DesktopInput.java
+		side effect of mobile having the desktop ui when In Ai or Joystick Mode but oh well
+
     	table.image().color(Pal.gray).height(4f).colspan(2).growX();
     	table.row();
     	table.left().margin(0f).defaults().size(48f). left();
@@ -187,21 +230,133 @@ public class AIInput extends InputHandler {
 
    		 table.button(Icon.move, Styles.clearTogglePartiali, () -> {
 		        manualMode = !manualMode;
-    		}).update(l -> l.setChecked(manualMode)).tooltip("@ai.manual-mode");
-     }*/
-	@Override
-	public void buildUI(Group origin) {
-		super.buildUI(origin);
-		  if (manualMode)
+    		}).update(l -> l.setChecked(manualMode)).tooltip("@ai.manual-mode");*/
+     }
+
+	 boolean showHint(){
+		return ui.hudfrag.shown && Core.settings.getBool("hints") && selectRequests.isEmpty() &&
+				(!isBuilding && !Core.settings.getBool("buildautopause") || player.unit().isBuilding() || !player.dead() && !player.unit().spawnedByCore());
+	}
+	 @Override
+
+	 public void buildUI(Group origin) {
+		 super.buildUI(origin);
+		 if (manualMode){
 			origin.fill(t -> {
 				t.center().bottom();
 				ActionPanel.buildLandscape(t, this);
-			});
-		  else {
-			  origin.clear();
+			});}
+		  //Add so we can have basic building (?)
+		 else{
+			  origin.fill(t -> {
+				  t.color.a = 0f;
+				  t.visible(() -> (t.color.a = Mathf.lerpDelta(t.color.a, Mathf.num(showHint()), 0.15f)) > 0.001f);
+				  t.bottom();
+				  t.table(Styles.black6, b -> {
+					  StringBuilder str = new StringBuilder();
+					  b.defaults().left();
+					  b.label(() -> {
+						  if(!showHint()) return str;
+						  str.setLength(0);
+						  if(!isBuilding && !Core.settings.getBool("buildautopause") && !player.unit().isBuilding()){
+							  str.append(Core.bundle.format("enablebuilding", Core.keybinds.get(Binding.pause_building).key.toString()));
+						  }else if(player.unit().isBuilding()){
+							  str.append(Core.bundle.format(isBuilding ? "pausebuilding" : "resumebuilding", Core.keybinds.get(Binding.pause_building).key.toString()))
+									  .append("\n").append(Core.bundle.format("cancelbuilding", Core.keybinds.get(Binding.clear_building).key.toString()))
+									  .append("\n").append(Core.bundle.format("selectschematic", Core.keybinds.get(Binding.schematic_select).key.toString()));
+						  }
+						  if(!player.dead() && !player.unit().spawnedByCore()){
+							  str.append(str.length() != 0 ? "\n" : "").append(Core.bundle.format("respawn", Core.keybinds.get(Binding.respawn).key.toString()));
+						  }
+						  return str;
+					  }).style(Styles.outlineLabel);
+				  }).margin(10f);
+			  });
+			  origin.fill(t -> {
+				  t.visible(() -> ui.hudfrag.shown && lastSchematic != null && !selectRequests.isEmpty());
+				  t.bottom();
+				  t.table(Styles.black6, b -> {
+					  b.defaults().left();
+					  b.label(() -> Core.bundle.format("schematic.flip",
+							  Core.keybinds.get(Binding.schematic_flip_x).key.toString(),
+							  Core.keybinds.get(Binding.schematic_flip_y).key.toString())).style(Styles.outlineLabel).visible(() -> Core.settings.getBool("hints"));
+					  b.row();
+					  b.table(a -> {
+						  a.button("@schematic.add", Icon.save, this::showSchematicSave).colspan(2).size(250f, 50f).disabled(f -> lastSchematic == null || lastSchematic.file != null);
+					  });
+				  }).margin(6f);
+			  });
 		  }
 	}
 
+	@Override
+	public void drawTop(){
+		Lines.stroke(1f);
+		int cursorX = tileX(Core.input.mouseX());
+		int cursorY = tileY(Core.input.mouseY());
+
+		//draw break selection
+		//drawBreakSelection(selectX, selectY, cursorX, cursorY, !Core.input.keyDown(Binding.schematic_select) ? maxLength : Vars.maxSchematicSize);
+	}
+
+	@Override
+	public void drawBottom(){
+		int cursorX = tileX(Core.input.mouseX());
+		int cursorY = tileY(Core.input.mouseY());
+
+		//draw request being moved
+		if(sreq != null){
+			boolean valid = validPlace(sreq.x, sreq.y, sreq.block, sreq.rotation, sreq);
+			if(sreq.block.rotate){
+				drawArrow(sreq.block, sreq.x, sreq.y, sreq.rotation, valid);
+			}
+
+			sreq.block.drawPlan(sreq, allRequests(), valid);
+
+			drawSelected(sreq.x, sreq.y, sreq.block, getRequest(sreq.x, sreq.y, sreq.block.size, sreq) != null ? Pal.remove : Pal.accent);
+		}
+
+		//draw hover request
+		if(!isPlacing()){
+			BuildPlan req = getRequest(cursorX, cursorY);
+			if(req != null){
+				drawSelected(req.x, req.y, req.breaking ? req.tile().block() : req.block, Pal.accent);
+			}
+		}
+
+		if(player.isBuilder()){
+			//draw things that may be placed soon
+			if(block != null){
+				for(int i = 0; i < lineRequests.size; i++){
+					BuildPlan req = lineRequests.get(i);
+					if(i == lineRequests.size - 1 && req.block.rotate){
+						drawArrow(block, req.x, req.y, req.rotation);
+					}
+					drawRequest(lineRequests.get(i));
+				}
+				lineRequests.each(this::drawOverRequest);
+			}else if(isPlacing()){
+				if(block.rotate && block.drawArrow){
+					drawArrow(block, cursorX, cursorY, rotation);
+				}
+				Draw.color();
+				boolean valid = validPlace(cursorX, cursorY, block, rotation);
+				drawRequest(cursorX, cursorY, block, rotation);
+				block.drawPlace(cursorX, cursorY, rotation, valid);
+
+				if(block.saveConfig){
+					Draw.mixcol(!valid ? Pal.breakInvalid : Color.white, (!valid ? 0.4f : 0.24f) + Mathf.absin(Time.globalTime, 6f, 0.28f));
+					brequest.set(cursorX, cursorY, rotation, block);
+					brequest.config = block.lastConfig;
+					block.drawRequestConfig(brequest, allRequests());
+					brequest.config = null;
+					Draw.reset();
+				}
+			}
+		}
+
+		Draw.reset();
+	}
 	//REGION CONTROLS
 	@Override
 	public void update() {
@@ -214,7 +369,7 @@ public class AIInput extends InputHandler {
 		if (!ui.chatfrag.shown() && Math.abs(Core.input.axis(Binding.zoom)) > 0) {
 			renderer.scaleCamera(Core.input.axis(Binding.zoom));
 		}
-		
+
 		if (!paused) {
 			if (manualMode) {
 				manualMovement(player.unit());
@@ -223,8 +378,60 @@ public class AIInput extends InputHandler {
 				aiActions(player.unit());
 			}
 		}
+		AIPanel enabledAI = new AIPanel();
+
+		//Shortcut keys
+		if(state.isGame() && !scene.hasDialog() && !(scene.getKeyboardFocus() instanceof TextField)){
+			if(Core.input.keyTap(Binding.minimap)) ui.minimapfrag.toggle();
+			if(Core.input.keyTap(Binding.planet_map) && state.isCampaign()) ui.planet.toggle();
+			if(Core.input.keyTap(Binding.research) && state.isCampaign()) ui.research.toggle();
+			if(Core.input.keyTap(KeyCode.h)) enabledAI.enabled = !enabledAI.enabled;
+		}
+
+		//Camera panning
+		boolean locked = locked();
+		boolean panCam = false;
+		float camSpeed = (!Core.input.keyDown(Binding.boost) ? panSpeed : panBoostSpeed) * Time.delta;
+
+		if(input.keyDown(Binding.pan) && !scene.hasField() && !scene.hasDialog()){
+			panCam = true;
+			panning = true;
+		}
+
+		if((Math.abs(Core.input.axis(Binding.move_x)) > 0 || Math.abs(Core.input.axis(Binding.move_y)) > 0 || input.keyDown(Binding.mouse_move)) && (!scene.hasField())){
+			panning = false;
+		}
+
+		if(!locked){
+			if(((player.dead() || state.isPaused()) && !ui.chatfrag.shown()) && !scene.hasField() && !scene.hasDialog()){
+				if(input.keyDown(Binding.mouse_move)){
+					panCam = true;
+				}
+
+				Core.camera.position.add(Tmp.v1.setZero().add(Core.input.axis(Binding.move_x), Core.input.axis(Binding.move_y)).nor().scl(camSpeed));
+			}else if(!player.dead() && !panning){
+				Core.camera.position.lerpDelta(player, Core.settings.getBool("smoothcamera") ? 0.08f : 1f);
+			}
+
+			if(panCam){
+				Core.camera.position.x += Mathf.clamp((Core.input.mouseX() - Core.graphics.getWidth() / 2f) * panScale, -1, 1) * camSpeed;
+				Core.camera.position.y += Mathf.clamp((Core.input.mouseY() - Core.graphics.getHeight() / 2f) * panScale, -1, 1) * camSpeed;
+			}
+
+		}
+
+		//respawn shortcut, just in case
+		if(!player.dead() && !state.isPaused() && !scene.hasField() && !locked){
+			//updateMovement(player.unit());
+
+			if(Core.input.keyTap(Binding.respawn)){
+				controlledType = null;
+				recentRespawnTimer = 1f;
+				Call.unitClear(player);
+			}
+		}
 	}
-	
+
 	protected void manualMovement(Unit unit) {
 		if (!moveDir.isZero()) {
 			unit.movePref(moveDir.scl(unit.speed()));
@@ -294,19 +501,51 @@ public class AIInput extends InputHandler {
 		}
 
 		AIAction action = current != AIAction.AUTO ? current : auto;
-		
+
 		switch (action) {
-			case RETREAT: patrolAI(unit); break;
-			case ATTACK: attackAI(unit); break;
-			case MINE: mineAI(unit); break;
-			case BUILD: buildAi(unit); break;
-			case REPAIR: repairAi(unit); break;
-			case PATROL: patrolAI(unit); break;
+			case RETREAT -> patrolAI(unit);
+			case ATTACK -> attackAI(unit);
+			case MINE -> mineAI(unit);
+			case BUILD -> buildAi(unit);
+			case REPAIR -> repairAi(unit);
+			case PATROL -> retreatAI(unit);
 		}
 		
 		unit.controlWeapons(false, player.shooting);
+
+		//Building
+		if(Core.input.keyTap(Binding.clear_building)){
+			player.unit().clearBuilding();
+		}
 	}
-	
+
+	protected void retreatAI(Unit unit) {
+		retreatTile = Geometry.findClosest(unit.x, unit.y, indexer.getAllied(unit.team(), BlockFlag.repair));
+
+		float offset;
+		if (retreatTile == null) {
+			retreatTile = Geometry.findClosest(unit.x, unit.y, indexer.getAllied(unit.team(), BlockFlag.core));
+		}
+		offset = mineRadius;
+
+		if (retreatTile != null) {
+			if (unit.type.flying) {
+				float dst = unit.dst(retreatTile);
+				movement.set(retreatTile).sub(unit).limit(unit.speed());
+				if (dst < offset - 16f) {
+					movement.scl(-1);
+					unit.movePref(movement);
+				} else if (dst > offset) {
+					unit.movePref(movement);
+				}
+
+				aimLook(retreatTile);
+			} else {
+				pathfind(unit);
+			}
+		}
+	}
+
 	protected void attackAI(Unit unit) {
 		if (updateInterval.get(1, 10) || Units.invalidateTarget(target, unit.team, unit.x, unit.y)) {
 			target = Units.closestTarget(unit.team, unit.x, unit.y, unit.range() * 5, t -> true);
@@ -362,7 +601,7 @@ public class AIInput extends InputHandler {
 			if(valid){
 				//move toward the request
 				aimLook(req);
-				movement.set(0, 0).trns(req.angleTo(unit), mineRadius).add(req).sub(unit).limit(unit.speed());
+				movement.set(0, 0).trns(req.angleTo(unit), buildingRange - 5).add(req).sub(unit).limit(unit.speed());
 				unit.movePref(movement);
 			}else{
 				//discard invalid request
@@ -370,7 +609,7 @@ public class AIInput extends InputHandler {
 				lastPlan = null;
 			}
 		}
-		float rebuildTime = (unit.team.rules().ai ? Mathf.lerp(15f, 2f, unit.team.rules().aiTier) : 2f) * 60f;
+		//float rebuildTime = (unit.team.rules().ai ? Mathf.lerp(15f, 2f, unit.team.rules().aiTier) : 2f) * 60f;
 
 		//find new request
 		if(!unit.team.data().blocks.isEmpty() //&& timer.get(timerTarget3, rebuildTime)
@@ -482,17 +721,17 @@ public class AIInput extends InputHandler {
 				
 				aimLook(patrolTile);
 			} else {
-				pathfind(unit, Pathfinder.fieldCore);
+				pathfind(unit);
 			}
 		}
 	}
-	//ENDREGION CONTROLS
-	
-	protected void pathfind(Unit unit, int pathType) {
+
+	//REGION CONTROLS
+	protected void pathfind(Unit unit) {
 		int costType = unit.pathType();
 		Tile tile = unit.tileOn();
 		if (tile == null) return;
-		Tile targetTile = pathfinder.getTargetTile(tile, pathfinder.getField(unit.team, costType, pathType));
+		Tile targetTile = pathfinder.getTargetTile(tile, pathfinder.getField(unit.team, costType, Pathfinder.fieldCore));
 		
 		if (tile == targetTile || (costType == Pathfinder.costNaval && !targetTile.floor().isLiquid)) return;
 		
