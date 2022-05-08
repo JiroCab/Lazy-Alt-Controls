@@ -9,19 +9,21 @@ To enable the controls: press the 🔧 (wrench) button while in-game. You will s
 While the controls are enabled, you won't be able to perform some actions that are possible in vanilla mode (such as building). You can disable & enable the controls at any time so that shouldn't be a problem.
 
 # Mobile mode
-Mobile mode is half working, Aim And move joystick only no action pannel for now
+Mobile mode is half working, Aim And move joystick only, no action panel for now
 
 # Ai mode
 Can be enabled by disabling a toggle in the placement ui (right bottom corner). Reveals an ai control panel under the status label. Consists of these modes:
 * auto: performs one of following based on situation, in top to bottom priority 
-* ~~retreat: retreat to the nearest heal point when hp is bellow a threshold percent (off by default, see notes)~~ **(not implemented)**
+* retreat: retreat to the nearest heal point when hp is bellow a threshold percent (off by default, see notes)
 * attack: targets the nearest units & buildings in a specified radius, keeps maximum possible distance
 * repair: heal damaged blocks, only if unit's weapons can
 * mine: automatically mines specified items
 * build: builds everything in plan and rebuilds destroyed blocks
 * patrol: goes to the nearest spawn point / enemy core
 
-#Notes
-* When hp is bellow 'Respawn threshold' either your instantly respawn to your core (to save time) or you'll retreat to a heal point (not implemented)
+# Notes
+* When hp is bellow 'Respawn threshold' either your instantly respawn to your core (to save time) or you'll retreat to the nearest Heal point (should work expect when exclusively attacking)
 * Desktop Shortcuts should still 
-* Panning is a thing and acts like you moving
+* Panning is a thing and acts like you moving, no free cam
+* Possessing should work
+* Keyboard shortcut now work btw

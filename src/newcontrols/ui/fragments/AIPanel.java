@@ -105,7 +105,7 @@ public class AIPanel extends Fragment {
 
 						//preferences
 						actions.add((Element) new Spinner("@newcontrols.ai.actions-preferences", s -> {
-							s.defaults().growX().height(40f);
+							s.defaults().growX().height(35f);
 
 							//Attack range
 							s.add(new NiceSlider("@newcontrols.ai.prefs.attack-radius", 0, 1200, 16, radius -> ai.attackRadius = radius)
@@ -119,13 +119,13 @@ public class AIPanel extends Fragment {
 
 							//Hp threshold respawn
 							s.add(new NiceSlider("@newcontrols.ai.prefs.hp-respawn", 0, 100, 5, percent -> ai.respawnThreshold = percent)
-							.max(() -> 100)
+							.max(() -> 100f)
 							.process(v -> v <= 0 ? bundle.get("newcontrols.unit.noautorespawn") : Math.round(v) + "%" )).growX().row();
 
-							//Retreat Instead of Respawn
-							s.add(new Toggle(Icon.commandAttackSmall, Icon.commandRallySmall, "@newcontrols.ai.prefs.retreat_instead", toggle -> ai.retreatInstead = !ai.retreatInstead, Styles.clearPartialt)).growX().row();
+							//Retreat Instead of Respawn Toggle
+							s.add(new Spinner("@newcontrols.ai.prefs.retreat_instead", check -> ai.shouldRetreat = !ai.shouldRetreat).center()).growX().row();
 							//Items selection
-							s.add((Element) new Spinner("@newcontrols.ai.prefs.mine-items", items -> {
+							s.add(new Spinner("@newcontrols.ai.prefs.mine-items", items -> {
 								items.center().top();
 
 								Item.getAllOres().each(i -> {

@@ -15,10 +15,7 @@ import arc.scene.ui.TextField;
 import arc.scene.ui.layout.Table;
 import arc.struct.Queue;
 import arc.struct.Seq;
-import arc.util.Interval;
-import arc.util.Nullable;
-import arc.util.Time;
-import arc.util.Tmp;
+import arc.util.*;
 import mindustry.Vars;
 import mindustry.ai.Pathfinder;
 import mindustry.content.Blocks;
@@ -31,10 +28,12 @@ import mindustry.gen.*;
 import mindustry.graphics.Pal;
 import mindustry.input.Binding;
 import mindustry.input.InputHandler;
+import mindustry.input.PlaceMode;
 import mindustry.type.Item;
 import mindustry.type.ItemStack;
 import mindustry.type.UnitType;
 import mindustry.ui.Styles;
+import mindustry.world.Block;
 import mindustry.world.Build;
 import mindustry.world.Tile;
 import mindustry.world.blocks.ConstructBlock;
@@ -43,8 +42,8 @@ import newcontrols.ui.fragments.AIPanel;
 import newcontrols.ui.fragments.ActionPanel;
 
 import static arc.Core.*;
-import static arc.Core.input;
 import static mindustry.Vars.*;
+import static mindustry.input.PlaceMode.*;
 
 /** 
  * Emulates basic player actions && handles thumbstick controls, configurable.
@@ -81,15 +80,15 @@ public class AIInput extends InputHandler {
 	public Interval updateInterval = new Interval(4);
 	public boolean paused = false, manualMode = false;
 	public float lastZoom = -1; //no idea
-	
+
 	//Whether these actions are enabled. todo: actually make this comprehensible?
 	public boolean attack = true, mine = true, build = true, repair = true, retreat = true,  patrol = true;
-	
+
 	/** Current action selected by the user */
 	public AIAction current = AIAction.AUTO;
 	/** If the current action is auto, this field is used to save the current auto action */
 	public AIAction auto = AIAction.ATTACK;
-	
+
 	public Teamc target = null;
 	public Tile mineTile = null;
 	public Item mineItem = null;
@@ -104,20 +103,20 @@ public class AIInput extends InputHandler {
 	public Vec2 shootDir = new Vec2();
 	/** Whether the unit should shoot, used by manual control. Reset every frame */
 	public boolean shoot = false;
-	
+
 	//settings
 	public float attackRadius = 1200f;
 	public float mineRadius = 2f;
-	public float respawnThreshold = 5;
+	public float respawnThreshold = 5f * 100;
 	public boolean retreatInstead = false;
-
-
+	public boolean shouldRetreat = true;
+	public boolean fullyHealed = false;
 	/** Items that won't be mined */
-	public Seq<Item> mineExclude = new Seq();
-	
+	public final Seq<Item> mineExclude = new Seq();
+
 	public Unit unitTapped;
 	public Building buildingTapped;
-	
+
 	public static Vec2 movement = new Vec2();
 
 	//Building related stuff
@@ -128,6 +127,19 @@ public class AIInput extends InputHandler {
 	public int selectX = -1, selectY = -1, schemX = -1, schemY = -1;
 	/** Maximum line length. */
 	final static int maxLength = 100;
+	/** Previously selected tile. */
+	public Tile prevSelected;
+	/** Whether selecting mode is active. */
+	public PlaceMode mode;
+	/** Whether the player is currently in line-place mode. */
+	public boolean lineMode, schematicMode;
+	/** Whether no recipe was available when switching to break mode. */
+	public @Nullable Block lastBlock;
+	/** Place requests to be removed. */
+	public Seq<BuildPlan> removals = new Seq<>();
+	/** Whether or not the player is currently shifting all placed tiles. */
+	public boolean selecting;
+
 	int tileX(float cursorX){
 		Vec2 vec = Core.input.mouseWorld(cursorX, 0);
 		if(selectedBlock()){vec.sub(block.offset, block.offset);}
@@ -146,20 +158,20 @@ public class AIInput extends InputHandler {
 	@Override
 	public boolean tap(float x, float y, int count, KeyCode button){
 		//if(state.isMenu()) return false;
-		
+
 		float worldx = Core.input.mouseWorld(x, y).x, worldy = Core.input.mouseWorld(x, y).y;
 		Tile cursor = Vars.world.tile(Math.round(worldx / 8), Math.round(worldy / 8));
-		
+
 		if (cursor == null || scene.hasMouse(x, y)) return false;
-		
+
 		Call.tileTap(player, cursor);
 		Tile linked = cursor.build == null ? cursor : cursor.build.tile;
 
 		tileTappedH(linked.build);
-		
+
 		unitTapped = selectedUnit();
 		buildingTapped = selectedControlBuild();
-		
+
 		return false;
 	}
 
@@ -209,14 +221,77 @@ public class AIInput extends InputHandler {
 		table.image().color(Pal.gray).height(4f).colspan(4).growX();
 		table.row();
 		table.left().margin(0f).defaults().size(48f).left();
+		if(!manualMode){ //desktop ui
+			table.button(Icon.paste, Styles.clearPartiali, () -> ui.schematics.show()).tooltip("@schematics");
+			table.button(Icon.book, Styles.clearPartiali, () -> ui.database.show()).tooltip("@database");
+			table.button(Icon.tree, Styles.clearPartiali, () -> ui.research.show()).visible(() -> state.isCampaign()).tooltip("@research");
+			table.button(Icon.map, Styles.clearPartiali, () -> ui.planet.show()).visible(() -> state.isCampaign()).tooltip("@planetmap");
+		}
+		else { //mobile ui
+			table.button(Icon.hammer, Styles.clearTogglePartiali, () -> {
+				mode = mode == breaking ? block == null ? none : placing : breaking;
+				lastBlock = block;
+			}).update(l -> l.setChecked(mode == breaking)).name("breakmode");
 
-		table.button(Icon.paste, Styles.clearPartiali, () -> ui.schematics.show()).tooltip("@schematics");
+			//diagonal swap button
+			table.button(Icon.diagonal, Styles.clearTogglePartiali, () -> {
+				Core.settings.put("swapdiagonal", !Core.settings.getBool("swapdiagonal"));
+			}).update(l -> l.setChecked(Core.settings.getBool("swapdiagonal")));
 
-		table.button(Icon.book, Styles.clearPartiali, () -> ui.database.show()).tooltip("@database");
+			//rotate button
+			table.button(Icon.right, Styles.clearTogglePartiali, () -> {
+				if(block != null && block.rotate){
+					rotation = Mathf.mod(rotation + 1, 4);
+				}else{
+					schematicMode = !schematicMode;
+					if(schematicMode){
+						block = null;
+						mode = none;
+					}
+				}
+			}).update(i -> {
+				boolean arrow = block != null && block.rotate;
 
-		table.button(Icon.tree, Styles.clearPartiali, () -> ui.research.show()).visible(() -> state.isCampaign()).tooltip("@research");
+				i.getImage().setRotationOrigin(!arrow ? 0 : rotation * 90, Align.center);
+				i.getStyle().imageUp = arrow ? Icon.right : Icon.copy;
+				i.setChecked(!arrow && schematicMode);
+			});
 
-		table.button(Icon.map, Styles.clearPartiali, () -> ui.planet.show()).visible(() -> state.isCampaign()).tooltip("@planetmap");
+			//confirm button
+			table.button(Icon.ok, Styles.clearPartiali, () -> {
+				for(BuildPlan request : selectRequests){
+					Tile tile = request.tile();
+
+					//actually place/break all selected blocks
+					if(tile != null){
+						if(!request.breaking){
+							if(validPlace(request.x, request.y, request.block, request.rotation)){
+								BuildPlan other = getRequest(request.x, request.y, request.block.size, null);
+								BuildPlan copy = request.copy();
+
+								if(other == null){
+									player.unit().addBuild(copy);
+								}else if(!other.breaking && other.x == request.x && other.y == request.y && other.block.size == request.block.size){
+									player.unit().plans().remove(other);
+									player.unit().addBuild(copy);
+								}
+							}
+
+							rotation = request.rotation;
+						}else{
+							tryBreakBlock(tile.x, tile.y);
+						}
+					}
+				}
+
+				//move all current requests to removal array so they fade out
+				removals.addAll(selectRequests.select(r -> !r.breaking));
+				selectRequests.clear();
+				selecting = false;
+			}).visible(() -> !selectRequests.isEmpty()).name("confirmplace");
+
+		}
+
 
 		/* Removes the old one for the one from DesktopInput.java
 		side effect of mobile having the desktop ui when In Ai or Joystick Mode but oh well
@@ -296,9 +371,16 @@ public class AIInput extends InputHandler {
 		int cursorY = tileY(Core.input.mouseY());
 
 		//draw break selection
-		//drawBreakSelection(selectX, selectY, cursorX, cursorY, !Core.input.keyDown(Binding.schematic_select) ? maxLength : Vars.maxSchematicSize);
-	}
+		if(mode == breaking){
+			drawBreakSelection(selectX, selectY, cursorX, cursorY, !Core.input.keyDown(Binding.schematic_select) ? maxLength : Vars.maxSchematicSize);
+		}
 
+		if(Core.input.keyDown(Binding.schematic_select) && !Core.scene.hasKeyboard() && mode != breaking){
+			drawSelection(schemX, schemY, cursorX, cursorY, Vars.maxSchematicSize);
+		}
+
+		Draw.reset();
+	}
 	@Override
 	public void drawBottom(){
 		int cursorX = tileX(Core.input.mouseX());
@@ -357,15 +439,21 @@ public class AIInput extends InputHandler {
 
 		Draw.reset();
 	}
+
+	@Override
+	public boolean isBreaking(){
+		return mode == breaking;
+	}
+
 	//REGION CONTROLS
 	@Override
 	public void update() {
 		super.update();
-		
+
 		if (!(player.dead() || state.isPaused())) {
 			Core.camera.position.lerpDelta(player, Core.settings.getBool("smoothcamera") ? 0.08f : 1f);
 		}
-		
+
 		if (!ui.chatfrag.shown() && Math.abs(Core.input.axis(Binding.zoom)) > 0) {
 			renderer.scaleCamera(Core.input.axis(Binding.zoom));
 		}
@@ -380,12 +468,16 @@ public class AIInput extends InputHandler {
 		}
 		AIPanel enabledAI = new AIPanel();
 
+		//Heal & retreat handles
+		fullyHealed = player.unit().health == player.unit().maxHealth;
+		shouldRetreat = retreatInstead && player.unit().health <= respawnThreshold;
+
 		//Shortcut keys
 		if(state.isGame() && !scene.hasDialog() && !(scene.getKeyboardFocus() instanceof TextField)){
 			if(Core.input.keyTap(Binding.minimap)) ui.minimapfrag.toggle();
 			if(Core.input.keyTap(Binding.planet_map) && state.isCampaign()) ui.planet.toggle();
 			if(Core.input.keyTap(Binding.research) && state.isCampaign()) ui.research.toggle();
-			if(Core.input.keyTap(KeyCode.h)) enabledAI.enabled = !enabledAI.enabled;
+			//if(Core.input.keyTap(KeyCode.h)) enabledAI.enabled = !enabledAI.enabled;
 		}
 
 		//Camera panning
@@ -430,6 +522,28 @@ public class AIInput extends InputHandler {
 				Call.unitClear(player);
 			}
 		}
+		//Possessing
+		shouldShoot = !scene.hasMouse() && !locked;
+		if(!scene.hasMouse() && !locked){
+			if(Core.input.keyDown(Binding.control) && Core.input.keyTap(Binding.select)){
+				Unit on = selectedUnit();
+				var build = selectedControlBuild();
+				if(on != null){
+					Call.unitControl(player, on);
+					shouldShoot = false;
+					recentRespawnTimer = 1f;
+				}else if(build != null){
+					Call.buildingControlSelect(player, build);
+					recentRespawnTimer = 1f;
+				}
+			}
+		}
+		if(Core.input.keyTap(Binding.select) && !Core.scene.hasMouse()){
+			Tile selected = world.tileWorld(input.mouseWorldX(), input.mouseWorldY());
+			if(selected != null){
+				Call.tileTap(player, selected);
+			}
+		}
 	}
 
 	protected void manualMovement(Unit unit) {
@@ -444,21 +558,21 @@ public class AIInput extends InputHandler {
 			aimLook(shootDir.scl(1600f).add(unit));
 		}
 		unit.controlWeapons(false, player.shooting = shoot);
-		
+
 		//reset to prevent stucking and smth
 		moveDir.set(0, 0);
 		shootDir.set(0, 0);
 		shoot = false;
 		unit.mineTile = null;
 	}
-	
+
 	protected void aiActions(Unit unit) {
 		UnitType type = unit.type;
 		if (type == null) return;
-		
+
 		player.shooting = false;
 		unit.mineTile = null;
-		
+
 		boolean canAttack = false;
 		for (var w : type.weapons) {
 			if (w.bullet.damage > 0 && w.bullet.collides) {
@@ -473,17 +587,16 @@ public class AIInput extends InputHandler {
 				break;
 			}
 		}
-		boolean shouldRetreat = unit.health <= respawnThreshold && retreatInstead;
 
 		Building core = unit.closestCore();
 		if (core != null && (updateInterval.get(2, 60) || mineItem == null)) {
-			mineItem = Item.getAllOres().min(i -> 
+			mineItem = Item.getAllOres().min(i ->
 				!mineExclude.contains(i) && indexer.hasOre(i) && unit.canMine(i) && core.acceptStack(i, 1, unit) > 0, i -> core.items.get(i)
 			);
 		}
-		
+
 		if (current == AIAction.AUTO && updateInterval.get(20)) {
-			if (retreat && shouldRetreat) {
+			if (retreat && shouldRetreat && !fullyHealed) {
 				auto = AIAction.RETREAT;
 			} else if (attack && canAttack && (target = Units.closestTarget(unit.team, unit.x, unit.y, attackRadius > 0 ? attackRadius : Float.MAX_VALUE, t -> true)) != null) {
 			auto = AIAction.ATTACK;
@@ -503,14 +616,14 @@ public class AIInput extends InputHandler {
 		AIAction action = current != AIAction.AUTO ? current : auto;
 
 		switch (action) {
-			case RETREAT -> patrolAI(unit);
+			case RETREAT -> retreatAI(unit);
 			case ATTACK -> attackAI(unit);
 			case MINE -> mineAI(unit);
 			case BUILD -> buildAi(unit);
 			case REPAIR -> repairAi(unit);
-			case PATROL -> retreatAI(unit);
+			case PATROL -> patrolAI(unit);
 		}
-		
+
 		unit.controlWeapons(false, player.shooting);
 
 		//Building
@@ -520,13 +633,11 @@ public class AIInput extends InputHandler {
 	}
 
 	protected void retreatAI(Unit unit) {
+		//retreat to heal point else to a core
 		retreatTile = Geometry.findClosest(unit.x, unit.y, indexer.getAllied(unit.team(), BlockFlag.repair));
-
 		float offset;
-		if (retreatTile == null) {
-			retreatTile = Geometry.findClosest(unit.x, unit.y, indexer.getAllied(unit.team(), BlockFlag.core));
-		}
-		offset = mineRadius;
+		if (retreatTile == null) {retreatTile = Geometry.findClosest(unit.x, unit.y, indexer.getAllied(unit.team(), BlockFlag.core));}
+		offset = 60f - mineRadius; //why not
 
 		if (retreatTile != null) {
 			if (unit.type.flying) {
@@ -535,9 +646,7 @@ public class AIInput extends InputHandler {
 				if (dst < offset - 16f) {
 					movement.scl(-1);
 					unit.movePref(movement);
-				} else if (dst > offset) {
-					unit.movePref(movement);
-				}
+				} else if (dst > offset) {unit.movePref(movement);}
 
 				aimLook(retreatTile);
 			} else {
@@ -550,39 +659,44 @@ public class AIInput extends InputHandler {
 		if (updateInterval.get(1, 10) || Units.invalidateTarget(target, unit.team, unit.x, unit.y)) {
 			target = Units.closestTarget(unit.team, unit.x, unit.y, unit.range() * 5, t -> true);
 		}
-		
-		UnitType type = unit.type;
-		
-		if (target != null && type != null) {
-		  //Respawn when threshold is met to save time by not getting lock on the unit's death
-		  if(respawnThreshold >= 1 && unit.health <= respawnThreshold)
-		    {
-				unitClear(player);
-			}
-		 	float bulletSpeed = unit.hasWeapons() ? type.weapons.first().bullet.speed : 0;
 
-			float approachRadius = 0.95f;
-			float approachRadiusClose = 0.50f;
-			boolean useCloseApproach = false;
-			for(var r : type.weapons) {
-				if (r.minShootVelocity <= 0) {
-					useCloseApproach = true;
-					break;
+		UnitType type = unit.type;
+
+		if (target != null && type != null) {
+
+			if (respawnThreshold >= 1 && player.unit().health <= respawnThreshold &&!retreatInstead)
+				//Respawn when threshold is met to save time by not getting lock on the unit's death, still allow
+				{unitClear(player);}
+			else if (respawnThreshold >= 1 && player.unit().health <= respawnThreshold && !fullyHealed) {
+				retreatAI(unit);} //Allow for retreating when exclusively attacking
+		  	else {
+
+				float bulletSpeed = unit.hasWeapons() ? type.weapons.first().bullet.speed : 0;
+
+				float approachRadius = 0.95f;
+
+				float approachRadiusClose = 0.50f;
+				boolean useCloseApproach = false;
+				for(var r : type.weapons) {
+					if (r.minShootVelocity <= 0) {
+						useCloseApproach = true;
+						break;
+					}
 				}
+				float dist = unit.range() * approachRadius;
+				if (useCloseApproach) {
+					dist = unit.range() * approachRadiusClose;
+				}
+				float angle = target.angleTo(unit);
+				Tmp.v1.set(Angles.trnsx(angle, dist), Angles.trnsy(angle, dist));
+				movement.set(target).add(Tmp.v1).sub(unit).limit(unit.speed());
+				unit.movePref(movement);
+
+				Vec2 intercept = Predict.intercept(unit, target, bulletSpeed);
+				player.shooting = unit.within(intercept, unit.range() * 1.25f);
+				aimLook(intercept);}
 			}
-			float dist = unit.range() * approachRadius;
-			if (useCloseApproach) {
-				dist = unit.range() * approachRadiusClose;
-			}
-			float angle = target.angleTo(unit);
-			Tmp.v1.set(Angles.trnsx(angle, dist), Angles.trnsy(angle, dist));
-			movement.set(target).add(Tmp.v1).sub(unit).limit(unit.speed());
-			unit.movePref(movement);
-			
-			Vec2 intercept = Predict.intercept(unit, target, bulletSpeed);
-			player.shooting = unit.within(intercept, unit.range() * 1.25f);
-			aimLook(intercept);
-		}
+
 	}
 
 	//Yes this just BuilderAi with extra/fewer steps
@@ -783,5 +897,9 @@ public class AIInput extends InputHandler {
 		       current == AIAction.AUTO ? bundle.format(first + current, bundle.get(first + auto)) : 
 		       bundle.get(first + current);
 	}
-	
+
+	@Override
+	public boolean selectedBlock(){
+		return isPlacing() && mode != breaking;
+	}
 }
