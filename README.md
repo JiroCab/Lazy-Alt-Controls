@@ -1,3 +1,6 @@
+# NOTICE: Currently shelved unill V7's release or ealier, when controls feels more mature 
+not that this mod shows in the mod browser, it doesnt for some reason
+
 # New-Controls
 A Fork of ***Mnemotechnician/New-Controls-Public*** to make an Ai do simple tasks for when your lazy and/or afk!
 
