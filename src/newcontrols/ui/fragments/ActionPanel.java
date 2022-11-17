@@ -1,27 +1,20 @@
 package newcontrols.ui.fragments;
 
-import arc.*;
-import arc.func.*;
-import arc.math.*;
-import arc.math.geom.*;
-import arc.scene.*;
-import arc.scene.style.*;
-import arc.scene.ui.*;
-import arc.scene.ui.layout.*;
-import arc.util.*;
-import mindustry.*;
-import mindustry.game.*;
-import mindustry.gen.*;
-import mindustry.ui.*;
-import mindustry.type.*;
-import mindustry.input.*;
-import mindustry.entities.*;
+import arc.scene.style.TextureRegionDrawable;
+import arc.scene.ui.layout.Table;
+import mindustry.entities.Units;
+import mindustry.gen.Building;
+import mindustry.gen.Call;
+import mindustry.gen.Payloadc;
+import mindustry.gen.Unit;
+import mindustry.ui.Styles;
+import newcontrols.input.AIInput;
+import newcontrols.ui.NCStyles;
 
-import static arc.Core.*;
-import static mindustry.Vars.*;
-
-import newcontrols.ui.*;
-import newcontrols.input.*;
+import static arc.Core.atlas;
+import static arc.Core.graphics;
+import static mindustry.Vars.player;
+import static mindustry.Vars.world;
 
 public class ActionPanel {
 	//landscape, displayed on the bottom
@@ -49,7 +42,7 @@ public class ActionPanel {
 				payloads.button("@newcontrols.manual.drop", NCStyles.clearPartialt, () -> input.tryDropPayload())
 				.disabled(b -> !(player.unit() instanceof Payloadc) || !((Payloadc) player.unit()).hasPayload());
 			}).row();
-		}, () -> !graphics.isPortrait());
+		}, () -> !graphics.isPortrait() && input.manualMode );
 	}
 	
 	//portrait, displayed above right thumbstick
@@ -80,16 +73,15 @@ public class ActionPanel {
 				payloads.button(makeRegion("newcontrols-drop-payload"), Styles.flati, () -> input.tryDropPayload())
 				.disabled(b -> !(player.unit() instanceof Payloadc) || !((Payloadc) player.unit()).hasPayload());
 			});
-		}, () -> Core.graphics.isPortrait());
+		}, () -> graphics.isPortrait());
 	}
 	
 	protected static void unitPickup() {
 		// todo migrate to kotlin if i'm ever going to continue this
 		// because java sucks. imagine not understanding that [self] is a (Unit & Payloadc).
-		if (!(player.unit() instanceof Payloadc)) return;
+		if (!(player.unit() instanceof Payloadc pay)) return;
 		Unit self = player.unit();
-		Payloadc pay = (Payloadc) player.unit();
-			
+
 		Unit target = Units.closest(player.team(), self.x, self.y, 8f, u -> u != self && u.isGrounded() && pay.canPickup(u) && u.within(self, u.hitSize + 8f));
 		
 		if (target != null) Call.requestUnitPayload(player, target);

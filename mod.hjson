@@ -1,14 +1,13 @@
-#!VERSION 1.12
+#!VERSION 1.1.0
 #!BRANCH "master"
-#!REPO "Mnemotechnician/New-Controls-Public"
-#!NO_UPDATE 1
+#!REPO "JiroCab/Lazy-Alt-Controls"
 
-displayName: "New controls"
-name: "newcontrols"
-author: "Мнемотехник"
-description: "This mod is multiplayer-compatible!\n\nSo, basically... This mod adds new ways of controlling your unit (mostly for mobile): fully manual and fully ai.\n\nManual mode consists of two thumbsticks and an action panel.\nAi mode includes three actions (attack, mine, patrol) + auto action selection.\n\nCheck readme.md for detailed info."
-version: 1.1.2
-minGameVersion: 136
+displayName: "Lazy Alt controls"
+name: "ai-controls"
+author: "JiroCab/Rush, Мнемотехник"
+description: "Fork of 'Mnemotechnician/New-Controls-Public' that focuses on the Ai part. Ai will attack, mine, rebuild & patrol \n\n tailored for Desktop for maximum laziness or when afk \n with some legacy mobile joysticks!"
+version: "1.1.0"
+minGameVersion: "136"
 hidden: true
 
 java: true

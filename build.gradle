@@ -25,8 +25,9 @@ allprojects{
 }
 
 dependencies{
-	compileOnly "com.github.Anuken.Arc:arc-core:v136"
-	compileOnly "com.github.anuken.mindustry:core:02dd74b113"
+	annotationProcessor 'com.github.Anuken:jabel:0.8.0'
+	compileOnly "com.github.Anuken.Mindustry:core:v140"
+	compileOnly "com.github.Anuken.Arc:arc-core:dfcb21ce56"
 
 	implementation "com.github.mnemotechnician:autoupdate-lib:-SNAPSHOT"
 }
@@ -35,7 +36,7 @@ task jarAndroid{
 	dependsOn "jar"
 
 	doLast{
-		if(!sdkRoot || !new File(sdkRoot).exists()) throw new GradleException("No valid Android SDK found. Ensure that ANDROID_HOME is set to your Android SDK directory.");
+		if(!sdkRoot || !new File(sdkRoot).exists()) throw new GradleException("No valid Android SDK found. Ensure that ANDROID_HOME is set to your Android SDK directory.")
 
 		def platformRoot = new File("$sdkRoot/platforms/").listFiles().sort().reverse().find{ f -> new File(f, "android.jar").exists()}
 

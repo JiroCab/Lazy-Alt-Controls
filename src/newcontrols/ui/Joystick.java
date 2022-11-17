@@ -1,20 +1,14 @@
 package newcontrols.ui;
 
-import arc.*;
-import arc.func.*;
-import arc.graphics.*;
-import arc.graphics.g2d.*;
-import arc.input.*;
-import arc.math.*;
-import arc.math.geom.*;
-import arc.scene.*;
-import arc.scene.actions.*;
-import arc.scene.event.*;
-import arc.scene.event.InputEvent.*;
-import arc.scene.utils.*;
-import arc.struct.*;
-import arc.util.*;
-import static arc.Core.*;
+import arc.func.Cons;
+import arc.graphics.Color;
+import arc.graphics.g2d.Draw;
+import arc.graphics.g2d.Fill;
+import arc.input.KeyCode;
+import arc.math.geom.Vec2;
+import arc.scene.Element;
+import arc.scene.event.InputEvent;
+import arc.scene.event.InputListener;
 
 public class Joystick extends Element {
 	public Color backColor = new Color(0, 0, 0), stickColor = new Color(0.7f, 0.7f, 0.7f);

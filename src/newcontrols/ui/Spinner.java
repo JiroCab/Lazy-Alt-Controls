@@ -1,24 +1,24 @@
 package newcontrols.ui;
 
-import arc.*;
-import arc.func.*;
-import arc.struct.*;
-import arc.math.*;
-import arc.math.geom.*;
-import arc.util.*;
-import arc.scene.*;
-import arc.scene.ui.*;
-import arc.scene.ui.layout.*;
-import arc.scene.actions.*;
-import arc.scene.event.*;
-import arc.scene.utils.*;
-import mindustry.gen.*;
-import mindustry.ui.*;
+import arc.func.Cons;
+import arc.graphics.Color;
+import arc.math.geom.Vec2;
+import arc.scene.Element;
+import arc.scene.Scene;
+import arc.scene.event.Touchable;
+import arc.scene.ui.Image;
+import arc.scene.ui.TextButton;
+import arc.scene.ui.layout.Collapser;
+import arc.scene.ui.layout.Scl;
+import arc.scene.ui.layout.Table;
+import arc.util.Interval;
+import arc.util.Timer;
+import mindustry.gen.Icon;
+import mindustry.ui.Styles;
 
 /** Text button, clicking on which shows/hides a collapser. The collapser is displayed over other elements. */
 public class Spinner extends TextButton {
 	public Collapser col;
-	public TextButton button;
 	public Image image;
 	
 	/** Whether to remove collapser if any of ancestors are invisible / untouchable */
@@ -30,9 +30,14 @@ public class Spinner extends TextButton {
 	Interval hideInterval = new Interval();
 	Timer.Task hideTask;
 	
-	public Spinner(String header, Cons<Table> constructor) {
+	public Spinner(String header, Boolean side, Color color, Cons<Table> constructor) {
 		super(header, Styles.fullTogglet);
-		add(image = new Image(Icon.downOpen)).size(Icon.downOpen.imageSize() * Scl.scl(1f)).padLeft(padW / 2f).left();
+		if (!side){
+			add(image = new Image(Icon.downOpen)).size(Icon.downOpen.imageSize() * Scl.scl(1f)).padLeft(padW / 2f).left();
+		} else {
+			add(image = new Image(Icon.downOpen)).size(Icon.downOpen.imageSize() * Scl.scl(1f)).padRight(padW / 2f).right();
+		}
+
 		getCells().reverse();
 		
 		clicked(() -> {
@@ -58,6 +63,7 @@ public class Spinner extends TextButton {
 			if (col.getScene() != null) {
 				col.visible = true;
 				col.color.a = parentAlpha * color.a;
+				col.color.set(color);
 				col.setSize(width, col.getPrefHeight());
 				
 				Vec2 point = localToStageCoordinates(tmp.set(0, -col.getPrefHeight()));
@@ -79,7 +85,17 @@ public class Spinner extends TextButton {
 			}
 		});
 	}
-	
+
+	public Spinner(String header, Cons<Table> constructor){
+		this(header, false, Color.black, constructor);
+	}
+	public Spinner(String header, Boolean side, Cons<Table> constructor){
+		this(header, side, Color.black, constructor);
+	}
+	public Spinner(String header, Cons<Table> constructor, Color color ){
+		this(header, false, color, constructor);
+	}
+
 	public void show(boolean animate) {
 		if (hideTask != null) hideTask.cancel();
 		

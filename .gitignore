@@ -154,6 +154,7 @@ gradle-app.setting
 .DS_Store
 Thumbs.db
 android/libs/
+andriodlib/
 
 ## Unused but very interesting shit, such as analytics :3
 ## Yes, i did implement analytics, but I'm not risking keeping them in a public version
