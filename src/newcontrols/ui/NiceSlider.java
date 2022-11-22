@@ -1,21 +1,16 @@
 package newcontrols.ui;
 
-import arc.*;
-import arc.func.*;
-import arc.scene.*;
-import arc.scene.ui.*;
-import arc.scene.ui.layout.*;
-import arc.scene.actions.*;
-import arc.scene.event.*;
-import arc.scene.utils.*;
-import mindustry.gen.*;
-import mindustry.ui.*;
-
-import newcontrols.func.*;
+import arc.func.Floatc;
+import arc.scene.event.Touchable;
+import arc.scene.ui.Label;
+import arc.scene.ui.Slider;
+import arc.scene.ui.layout.Table;
+import mindustry.ui.Styles;
+import newcontrols.func.Provf;
+import newcontrols.func.StringProcessor;
 
 /** Slider with extra funny stuff */
 public class NiceSlider extends Table {
-	
 	StringProcessor processor;
 	Provf minProv, maxProv;
 	
@@ -70,5 +65,4 @@ public class NiceSlider extends Table {
 			slider.setRange(min, max);
 		}
 	}
-
 }

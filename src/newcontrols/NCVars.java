@@ -1,19 +1,14 @@
 package newcontrols;
 
-import arc.*;
-import mindustry.*;
-import mindustry.game.*;
-
-import newcontrols.ui.fragments.*;
+import mindustry.Vars;
+import newcontrols.input.AiEnabler;
+import newcontrols.ui.fragments.AIPanel;
 
 public class NCVars {
-	
 	public static AIPanel aipanel = new AIPanel();
-	
+	public static AiEnabler enabler = new AiEnabler();
+
 	public static void init() {
-		Events.on(EventType.ClientLoadEvent.class, you -> {
-			aipanel.build(Vars.ui.hudGroup);
-		});
+		aipanel.build(Vars.ui.hudGroup);
 	}
-	
 }
